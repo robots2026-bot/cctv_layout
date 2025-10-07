@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.vscode/
+.env
+.env.*
+.DS_Store
+coverage/
+logs/
+pnpm-lock.yaml
+yarn.lock
+.tmp/
+.idea/
+*.tsbuildinfo

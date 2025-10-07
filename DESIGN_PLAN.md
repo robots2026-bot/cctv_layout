@@ -143,3 +143,21 @@
 - **设备平台接口不稳定**：预留模拟数据与重试机制。
 - **画布性能瓶颈**：前期预研 Konva/Fabric 优化手段，采用虚拟化列表与图层管理。
 - **多人协作冲突**：引入乐观锁或 CRDT 同步方案，确保数据一致性。
+
+## 9. 当前实现进展（2025-10）
+
+1. **前端骨架**
+   - Vite + React + TypeScript + Tailwind + Zustand 已完成初始化。
+   - 画布区实现 `CanvasStage`、`DeviceNode`、`ConnectionLine` 等核心组件，支持背景图透明度调节、拖拽放置、缩放视图。
+   - 状态切片按照方案拆分为 `projectStore`、`canvasStore`、`layoutStore`、`realtimeStore`、`uiStore`，并封装 WebSocket 连接 hook。
+   - 预置布局工作台、项目概览页面与通知侧栏，便于后续集成更多交互。
+
+2. **后端骨架**
+   - NestJS 工程完成模块划分：项目、设备、布局、文件、认证、实时、健康检查、操作日志。
+   - 集成 TypeORM + PostgreSQL 实体：项目、设备、布局、布局版本、用户、活动日志。
+   - 设备同步服务实现去重逻辑，联动实时网关与操作日志；布局服务支持版本快照写入与广播事件。
+   - 引入 Socket.IO 网关 `RealtimeGateway`，暴露 `device.update`、`layout.version` 等事件，支撑前端实时需求。
+
+3. **工程化与运维**
+   - 前后端均提供独立 Dockerfile 与 npm scripts；前端 `npm run build`、后端 `npm run build` 均通过。
+   - README 已更新为快速启动指南，明确运行方式与环境变量约定。
