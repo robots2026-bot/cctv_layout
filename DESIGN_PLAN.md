@@ -5,17 +5,90 @@
 
 ## 2. 系统架构
 - **前端**：
-  - 技术选型：React + TypeScript + Zustand（或 Redux Toolkit）用于状态管理，Tailwind CSS 提升样式开发效率。
-  - 布局编辑：采用 Konva.js 或 Fabric.js 支持 Canvas 拖拽、缩放、连接线绘制。
+  - 技术选型：React + TypeScript + Zustand 进行状态管理，配合 Tailwind CSS 提升样式开发效率。
+  - 布局编辑：采用 Konva.js 支持 Canvas 拖拽、缩放、连接线绘制，使用 react-konva 封装组件。
   - 通信：通过 WebSocket 接收实时设备扫描推送，REST API 执行常规数据管理操作。
 - **后端**：
-  - 技术选型：Node.js（NestJS 框架）或 Python（FastAPI），根据团队经验决定。
+  - 技术选型：Node.js（NestJS 框架）作为唯一后端框架选择，统一采用 TypeScript 编写服务。
   - 功能模块：
     - 设备发现与接入模块：从网络扫描服务或第三方平台获取设备列表。
     - 布局管理模块：存储项目、平面图、设备位置及连线。
     - 文件服务：处理背景图上传、存储与缩略图生成。
     - 推送服务：通过 WebSocket 将最新设备状态推送至前端。
-  - 数据库：PostgreSQL 存储结构化数据，Redis 缓存实时设备状态。
+  - 数据库：PostgreSQL 存储结构化数据，Redis 缓存实时设备状态并辅助消息发布订阅。
+
+### 2.1 前端架构细化
+- **页面结构**：
+  - 登录/项目概览页：展示项目卡片、最近更新时间、设备总览。
+  - 布局工作台：包含画布区（Konva Stage）、设备资源列表、属性面板、版本面板。
+  - 系统设置页：维护扫描周期、默认图层可见性、团队成员权限。
+- **状态切片**：
+  1. `projectStore`：项目元信息、成员、权限，负责发起 REST 查询。
+  2. `canvasStore`：画布元素集合、选择状态、图层可见性、撤销重做栈，封装对 Konva 节点的纯数据操作。
+  3. `realtimeStore`：WebSocket 连接状态、在线成员列表、实时设备心跳。
+  4. `uiStore`：模态窗口、通知、全局加载态。
+- **组件划分**：
+  - 原子组件：按钮、表单、弹窗等，通过 Tailwind 原子类与 Radix UI 组合实现。
+  - 画布组件：`CanvasStage`、`DeviceNode`、`ConnectionLine`、`GridBackground`，严格区分展示型与容器型组件。
+  - 侧栏组件：`DevicePalette`（可拖拽列表）、`PropertyPanel`、`VersionHistory`。
+- **性能策略**：
+  - 使用 `react-konva` 的 `FastLayer` 渲染大量静态图元。
+  - 通过 requestAnimationFrame 合并高频拖拽状态更新。
+  - 对设备列表与属性面板采用虚拟滚动，减轻 DOM 负载。
+  - 在 Zustand 中使用选择器与浅比较，避免无关组件重渲染。
+- **可扩展性**：
+  - 建立统一的 `CanvasElement` 类型定义，约束自定义节点扩展接口。
+  - 将导出能力封装为 hooks（如 `useExportImage`、`useExportConfig`），方便复用与测试。
+
+### 2.2 后端架构细化
+- **分层结构**：NestJS `modules` → `controllers`/`resolvers` → `services` → `repositories`/`integrations`，以依赖注入提升可测试性。
+- **核心模块职责**：
+  1. `ProjectsModule`：项目 CRUD、成员与权限管理、操作日志落库。
+  2. `DevicesModule`：对接扫描器（REST/消息队列），执行设备标准化、幂等写入、状态同步。
+  3. `LayoutsModule`：保存画布 JSON、维护版本链、处理冲突合并。
+  4. `FilesModule`：处理背景图上传（S3 兼容存储）、生成缩略图、提供受控访问链接。
+  5. `RealtimeGateway`：基于 `@nestjs/websockets`，统一管理房间订阅、事件广播、心跳检测。
+  6. `AuthModule`：JWT + Refresh Token、角色鉴权守卫、密码策略、审计钩子。
+- **数据访问**：采用 TypeORM（或 Prisma with PostgreSQL Driver）实现实体映射，配合迁移脚本管理 schema。
+- **异步任务**：引入 BullMQ（Redis）处理扫描重试、批量导入、版本快照清理、导出任务。
+- **配置管理**：使用 `@nestjs/config` 支持多环境配置，敏感信息读取自 `.env`/密钥管理服务。
+- **日志与观测**：整合 Pino/Winston 输出结构化日志，暴露 `/metrics` Prometheus 指标，接入 OpenTelemetry 收集 trace。
+
+### 2.3 集成与部署
+- **API 网关层**：Nginx/Traefik 负责 TLS 终止、静态资源缓存、WebSocket 代理。
+- **部署拓扑**：
+  - 前端构建后部署于对象存储 + CDN 或 Nginx 静态站点。
+  - 后端与扫描服务以 Docker Compose/Kubernetes 部署，提供滚动更新策略。
+  - PostgreSQL 与 Redis 独立部署并配置备份、主从高可用。
+- **CI/CD**：GitHub Actions 触发测试、构建、镜像推送；环境变量经由 Secrets 管理；提供预发环境供产品验收。
+- **安全加固**：启用 WAF/安全组限制来源 IP，使用 Vault/KMS 管理密钥，定期审计依赖漏洞。
+
+### 2.4 数据流与消息协议
+- **REST API 分层**：
+  - `/api/projects`：项目 CRUD、成员管理、权限配置。
+  - `/api/devices`：设备列表查询、状态过滤、手动录入、批量导入。
+  - `/api/layouts`：布局读取、保存、版本对比、导出任务创建。
+  - `/api/files`：背景图上传、签名 URL 获取、删除。
+  - `/api/auth`：登录、刷新、注销、密码找回。
+- **WebSocket 事件命名**：
+  - `device.update`：推送设备状态变更（在线/离线、信号强度、告警）。
+  - `layout.lock`：广播画布锁定/释放信息，避免冲突写。
+  - `layout.patch`：传递增量更新（diff/patch），支持多人协作。
+  - `presence.sync`：同步在线成员、光标位置、当前选中元素。
+- **消息格式约定**：
+  - 统一包裹 `{ event: string, payload: any, timestamp: number }` 结构。
+  - 关键字段如设备 ID、布局元素 ID 均使用 UUIDv4，避免前后端冲突。
+  - 大型 payload（> 200KB）改走文件或任务形式，WebSocket 只下发引用。
+
+### 2.5 配置与环境
+- **环境划分**：`development`、`staging`、`production`，通过 `NODE_ENV` 区分。
+- **可配置项**：
+  - 扫描任务周期、重试策略、并发上限。
+  - 布局快照保留数量、自动清理阈值。
+  - 背景图文件大小/格式限制。
+- **Secrets 管理**：集中由密钥管理服务下发，容器中仅读取一次；本地开发使用 `.env.local`。
+- **特性开关**：引入 `config/feature-flags.ts` 管理灰度功能，如高级协作、第三方摄像头协议。
+
 
 ## 3. 核心功能模块拆分
 1. **项目管理**
