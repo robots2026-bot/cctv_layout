@@ -18,7 +18,7 @@ export class LayoutVersionEntity {
   @JoinColumn({ name: 'layout_id' })
   layout!: LayoutEntity;
 
-  @Column({ name: 'layout_id' })
+  @Column({ name: 'layout_id', type: 'uuid' })
   layoutId!: string;
 
   @Column({ name: 'version_no', type: 'int' })
@@ -30,7 +30,7 @@ export class LayoutVersionEntity {
   @Column({ name: 'connections_json', type: 'jsonb' })
   connectionsJson!: unknown;
 
-  @Column({ name: 'created_by', nullable: true })
+  @Column({ name: 'created_by', type: 'uuid', nullable: true })
   createdBy?: string | null;
 
   @ManyToOne(() => UserEntity, { nullable: true })

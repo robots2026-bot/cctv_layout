@@ -11,10 +11,10 @@ export class ProjectEntity {
   @Column({ length: 120 })
   name!: string;
 
-  @Column({ nullable: true, length: 255 })
+  @Column({ nullable: true, length: 255, type: 'varchar' })
   location?: string | null;
 
-  @Column({ name: 'default_layout_id', nullable: true })
+  @Column({ name: 'default_layout_id', type: 'uuid', nullable: true })
   defaultLayoutId?: string | null;
 
   @CreateDateColumn({ name: 'created_at' })

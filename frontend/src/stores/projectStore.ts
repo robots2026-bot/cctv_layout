@@ -24,7 +24,8 @@ export const useProjectStore = create<ProjectState>()(
       set({ isLoading: true });
       try {
         const response = await apiClient.get<Project[]>('/projects');
-        set({ projects: response.data, isLoading: false });
+        const list = Array.isArray(response.data) ? response.data : [];
+        set({ projects: list, isLoading: false });
       } catch (error) {
         console.error('Failed to load projects', error);
         set({ isLoading: false });

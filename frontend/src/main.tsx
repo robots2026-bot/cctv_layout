@@ -4,8 +4,6 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import './index.css';
 
-declare const module: { hot?: { accept: () => void } };
-
 const root = document.getElementById('root');
 
 if (!root) {
@@ -20,6 +18,6 @@ ReactDOM.createRoot(root).render(
   </React.StrictMode>
 );
 
-if (module?.hot) {
-  module.hot.accept();
+if (import.meta.hot) {
+  import.meta.hot.accept();
 }

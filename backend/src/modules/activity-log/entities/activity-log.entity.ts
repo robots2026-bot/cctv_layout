@@ -11,14 +11,14 @@ export class ActivityLogEntity {
   @JoinColumn({ name: 'project_id' })
   project!: ProjectEntity;
 
-  @Column({ name: 'project_id' })
+  @Column({ name: 'project_id', type: 'uuid' })
   projectId!: string;
 
   @ManyToOne(() => UserEntity, { nullable: true })
   @JoinColumn({ name: 'user_id' })
   user?: UserEntity | null;
 
-  @Column({ name: 'user_id', nullable: true })
+  @Column({ name: 'user_id', type: 'uuid', nullable: true })
   userId?: string | null;
 
   @Column({ length: 120 })

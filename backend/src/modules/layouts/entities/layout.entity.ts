@@ -20,13 +20,13 @@ export class LayoutEntity {
   @JoinColumn({ name: 'project_id' })
   project!: ProjectEntity;
 
-  @Column({ name: 'project_id' })
+  @Column({ name: 'project_id', type: 'uuid' })
   projectId!: string;
 
   @Column({ length: 120 })
   name!: string;
 
-  @Column({ name: 'background_image_url', nullable: true })
+  @Column({ name: 'background_image_url', type: 'text', nullable: true })
   backgroundImageUrl?: string | null;
 
   @Column({ name: 'background_opacity', type: 'float', default: 0.6 })
@@ -35,7 +35,7 @@ export class LayoutEntity {
   @OneToMany(() => LayoutVersionEntity, (version) => version.layout)
   versions!: LayoutVersionEntity[];
 
-  @Column({ name: 'current_version_id', nullable: true })
+  @Column({ name: 'current_version_id', type: 'uuid', nullable: true })
   currentVersionId?: string | null;
 
   @CreateDateColumn({ name: 'created_at' })

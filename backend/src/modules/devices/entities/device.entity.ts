@@ -11,7 +11,7 @@ export class DeviceEntity {
   @ManyToOne(() => ProjectEntity, (project) => project.devices, { onDelete: 'CASCADE' })
   project!: ProjectEntity;
 
-  @Column({ name: 'project_id' })
+  @Column({ name: 'project_id', type: 'uuid' })
   projectId!: string;
 
   @Column({ length: 120 })
@@ -20,7 +20,7 @@ export class DeviceEntity {
   @Column({ length: 60 })
   type!: string;
 
-  @Column({ name: 'ip_address', nullable: true, length: 45 })
+  @Column({ name: 'ip_address', type: 'varchar', nullable: true, length: 45 })
   ipAddress?: string | null;
 
   @Column({ type: 'jsonb', nullable: true })
