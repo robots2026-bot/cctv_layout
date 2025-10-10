@@ -48,6 +48,20 @@ npm run start:dev    # 本地开发（需要 PostgreSQL、Redis）
 - Redis + BullMQ 预留异步任务能力
 - Socket.IO 网关推送设备与布局事件
 
+### 使用 Docker Compose 一键启动
+
+仓库内提供 `docker-compose.yml`，可以一次性启动 PostgreSQL、Redis、后端与前端：
+
+```bash
+docker compose up --build
+```
+
+启动后：
+
+- 前端：<http://localhost:5173>
+- 后端 API：<http://localhost:3000/api>
+- WebSocket：<http://localhost:3000/realtime>
+
 ## 开发约定
 
 - 所有配置来源统一通过 `@nestjs/config` 管理。
