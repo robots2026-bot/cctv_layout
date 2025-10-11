@@ -2,6 +2,7 @@ export interface CanvasElement {
   id: string;
   name: string;
   type: string;
+  deviceId?: string;
   metadata?: {
     ip?: string;
     [key: string]: unknown;
@@ -37,9 +38,7 @@ export interface CanvasLayout {
   projectId: string;
   background?: {
     url: string | null;
-    opacity: number;
   } | null;
-  backgroundOpacity: number;
   elements: CanvasElement[];
   connections: CanvasConnection[];
 }

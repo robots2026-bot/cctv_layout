@@ -2,9 +2,12 @@ import { Stage, Layer, Rect, Image as KonvaImage, Group } from 'react-konva';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import useImage from 'use-image';
 import { useCanvasStore } from '../../stores/canvasStore';
-import { useLayoutStore } from '../../stores/layoutStore';
 import { ConnectionLine } from './ConnectionLine';
 import { DeviceNode } from './DeviceNode';
+import { DEVICE_DRAG_DATA_FORMAT } from '../../utils/dragDrop';
+import { DeviceSummary } from '../../types/canvas';
+import { useRealtimeStore } from '../../stores/realtimeStore';
+import { KonvaEventObject } from 'konva/lib/Node';
 
 const GridBackground = () => {
   const { width, height, gridSize } = useCanvasStore((state) => ({
@@ -46,7 +49,6 @@ export const CanvasStage = () => {
     elements: state.elements,
     connections: state.connections
   }));
-  const { backgroundOpacity } = useLayoutStore((state) => ({ backgroundOpacity: state.layout?.backgroundOpacity ?? 0.6 }));
   const [image] = useImage(background?.url ?? '', 'anonymous');
   const [dimensions, setDimensions] = useState({ width: viewport.width, height: viewport.height });
 
@@ -63,6 +65,61 @@ export const CanvasStage = () => {
     return () => window.removeEventListener('resize', resize);
   }, [setViewport]);
 
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const container = stage.container();
+
+    const handleDragOver = (event: DragEvent) => {
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'copy';
+      }
+      event.preventDefault();
+    };
+
+    const handleDrop = (event: DragEvent) => {
+      event.preventDefault();
+      const dataTransfer = event.dataTransfer;
+      if (!dataTransfer) {
+        return;
+      }
+      const rawPayload =
+        dataTransfer.getData(DEVICE_DRAG_DATA_FORMAT) || dataTransfer.getData('application/json');
+      if (!rawPayload) {
+        return;
+      }
+
+      let device: DeviceSummary | null = null;
+      try {
+        device = JSON.parse(rawPayload) as DeviceSummary;
+      } catch (error) {
+        device = null;
+      }
+
+      if (!device || !device.id) {
+        return;
+      }
+
+      stage.setPointersPositions(event);
+      const pointer = stage.getRelativePointerPosition();
+      if (!pointer) {
+        return;
+      }
+      const dropPosition = { x: pointer.x, y: pointer.y };
+
+      useCanvasStore.getState().addDeviceToCanvas(device, dropPosition);
+      useRealtimeStore.getState().consumeDevice(device.id);
+    };
+
+    container.addEventListener('dragover', handleDragOver);
+    container.addEventListener('drop', handleDrop);
+
+    return () => {
+      container.removeEventListener('dragover', handleDragOver);
+      container.removeEventListener('drop', handleDrop);
+    };
+  }, []);
+
   return (
     <div className="flex flex-1 overflow-hidden bg-slate-950">
       <Stage
@@ -75,12 +132,35 @@ export const CanvasStage = () => {
         y={viewport.position.y}
         draggable
         className="cursor-grab"
-        onDragMove={(event) =>
-          setViewport({ position: { x: event.target.x(), y: event.target.y() } })
-        }
-        onDragEnd={(event) =>
-          setViewport({ position: { x: event.target.x(), y: event.target.y() } })
-        }
+        onDragStart={(event: KonvaEventObject<DragEvent>) => {
+          const stageNode = stageRef.current;
+          if (!stageNode || event.target !== stageNode) {
+            return;
+          }
+          useCanvasStore.getState().setHoveredElement(null);
+          stageNode.container().style.cursor = 'grabbing';
+        }}
+        onDragMove={(event: KonvaEventObject<DragEvent>) => {
+          const stageNode = stageRef.current;
+          if (!stageNode || event.target !== stageNode) {
+            return;
+          }
+          setViewport({ position: { x: stageNode.x(), y: stageNode.y() } });
+        }}
+        onDragEnd={(event: KonvaEventObject<DragEvent>) => {
+          const stageNode = stageRef.current;
+          if (!stageNode || event.target !== stageNode) {
+            return;
+          }
+          setViewport({ position: { x: stageNode.x(), y: stageNode.y() } });
+          stageNode.container().style.cursor = 'grab';
+        }}
+        onMouseLeave={() => {
+          const stageNode = stageRef.current;
+          if (!stageNode) return;
+          stageNode.container().style.cursor = 'grab';
+          useCanvasStore.getState().setHoveredElement(null);
+        }}
         onWheel={(event) => {
           event.evt.preventDefault();
           const scaleBy = 1.05;
@@ -93,7 +173,7 @@ export const CanvasStage = () => {
           <GridBackground />
         </Layer>
         {image && (
-          <Layer listening={false} opacity={backgroundOpacity}>
+          <Layer listening={false}>
             <KonvaImage image={image} width={image.width} height={image.height} />
           </Layer>
         )}

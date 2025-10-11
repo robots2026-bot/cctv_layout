@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { apiClient } from '../utils/apiClient';
 import { DeviceSummary } from '../types/canvas';
+import { useCanvasStore } from './canvasStore';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
@@ -17,6 +18,7 @@ interface RealtimeState {
   disconnect: () => void;
   fetchAvailableDevices: (projectId: string) => Promise<void>;
   handleEvent: (message: RealtimeEvent) => void;
+  consumeDevice: (deviceId: string) => void;
 }
 
 let socket: WebSocket | null = null;
@@ -54,15 +56,36 @@ export const useRealtimeStore = create<RealtimeState>()(
     fetchAvailableDevices: async (projectId: string) => {
       try {
         const response = await apiClient.get<DeviceSummary[]>(`/projects/${projectId}/devices`);
-        set({ availableDevices: response.data });
+        const placedIds = new Set(
+          useCanvasStore
+            .getState()
+            .elements.map((element) => element.deviceId)
+            .filter(Boolean) as string[]
+        );
+        const filtered = response.data.filter((device) => !placedIds.has(device.id));
+        set({ availableDevices: filtered });
       } catch (error) {
         console.error('获取可用设备失败', error);
       }
+    },
+    consumeDevice: (deviceId: string) => {
+      set((state) => ({
+        availableDevices: state.availableDevices.filter((device) => device.id !== deviceId)
+      }));
     },
     handleEvent: (message: RealtimeEvent) => {
       switch (message.event) {
         case 'device.update': {
           set((state) => {
+            const placedIds = new Set(
+              useCanvasStore
+                .getState()
+                .elements.map((element) => element.deviceId)
+                .filter(Boolean) as string[]
+            );
+            if (placedIds.has(message.payload.id)) {
+              return {};
+            }
             const exists = state.availableDevices.some((device) => device.id === message.payload.id);
             const availableDevices = exists
               ? state.availableDevices.map((device) =>

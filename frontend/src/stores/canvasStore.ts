@@ -5,23 +5,24 @@ import { nanoid } from '../utils/nanoid';
 
 interface CanvasBackground {
   url: string | null;
-  opacity: number;
 }
 
 interface CanvasState {
   elements: CanvasElement[];
   connections: CanvasConnection[];
   selectedElement: CanvasElement | null;
+  hoveredElementId: string | null;
   background: CanvasBackground | null;
   viewport: CanvasViewport;
   gridSize: number;
   setViewport: (viewport: Partial<CanvasViewport>) => void;
   setBackground: (background: CanvasBackground | null) => void;
   setCanvasData: (layout: CanvasLayout) => void;
-  addDeviceToCanvas: (device: DeviceSummary) => void;
+  addDeviceToCanvas: (device: DeviceSummary, position?: CanvasElement['position']) => void;
   selectElement: (elementId: string) => void;
   updateElementPosition: (elementId: string, position: CanvasElement['position']) => void;
   updateElementMetadata: (elementId: string, updates: Partial<CanvasElement>) => void;
+  setHoveredElement: (elementId: string | null) => void;
   resetCanvas: () => void;
 }
 
@@ -37,6 +38,7 @@ export const useCanvasStore = create<CanvasState>()(
     elements: [],
     connections: [],
     selectedElement: null,
+    hoveredElementId: null,
     background: null,
     gridSize: 48,
     viewport: defaultViewport,
@@ -60,25 +62,30 @@ export const useCanvasStore = create<CanvasState>()(
       set({
         elements: layout.elements.map((element) => ({ ...element, selected: false })),
         connections: layout.connections,
-        background: layout.background
-          ? { url: layout.background.url, opacity: layout.background.opacity }
-          : null,
-        selectedElement: null
+        background: layout.background ? { url: layout.background.url } : null,
+        selectedElement: null,
+        hoveredElementId: null
       }),
-    addDeviceToCanvas: (device) =>
+    addDeviceToCanvas: (device, position) =>
       set((state) => {
         const newElement: CanvasElement = {
           id: nanoid(),
           name: device.name,
           type: device.type,
-          metadata: { ip: device.ip },
-          position: { x: 50, y: 50 },
+          deviceId: device.id,
+          metadata: {
+            ip: device.ip,
+            status: device.status,
+            sourceDeviceId: device.id
+          },
+          position: position ?? { x: 50, y: 50 },
           size: { width: 150, height: 70 },
-          selected: true
+          selected: false
         };
         return {
           elements: state.elements.map((element) => ({ ...element, selected: false })).concat(newElement),
-          selectedElement: newElement
+          selectedElement: null,
+          hoveredElementId: newElement.id
         };
       }),
     selectElement: (elementId) =>
@@ -130,14 +137,19 @@ export const useCanvasStore = create<CanvasState>()(
                   ...state.selectedElement.metadata,
                   ...updates.metadata
                 }
-              }
-            : state.selectedElement
+            }
+          : state.selectedElement
+      })),
+    setHoveredElement: (elementId) =>
+      set(() => ({
+        hoveredElementId: elementId
       })),
     resetCanvas: () =>
       set({
         elements: [],
         connections: [],
         selectedElement: null,
+        hoveredElementId: null,
         background: null,
         viewport: defaultViewport
       })

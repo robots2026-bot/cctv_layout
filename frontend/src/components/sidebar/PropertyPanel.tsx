@@ -1,11 +1,8 @@
 import { useCanvasStore } from '../../stores/canvasStore';
-import { useLayoutStore } from '../../stores/layoutStore';
 
 export const PropertyPanel = () => {
   const selectedElement = useCanvasStore((state) => state.selectedElement);
-  const background = useLayoutStore((state) => state.layout?.background);
   const updateElement = useCanvasStore((state) => state.updateElementMetadata);
-  const updateBackgroundOpacity = useLayoutStore((state) => state.updateBackgroundOpacity);
 
   if (!selectedElement) {
     return (
@@ -14,20 +11,6 @@ export const PropertyPanel = () => {
           <h2 className="text-sm font-semibold text-slate-200">属性</h2>
         </div>
         <div className="flex-1 p-4 text-xs text-slate-500">选择设备以编辑属性</div>
-        {background && (
-          <div className="border-t border-slate-800 px-4 py-3">
-            <p className="text-xs text-slate-400">背景透明度</p>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={background.opacity}
-              onChange={(event) => updateBackgroundOpacity(Number(event.target.value))}
-              className="mt-2 w-full"
-            />
-          </div>
-        )}
       </div>
     );
   }

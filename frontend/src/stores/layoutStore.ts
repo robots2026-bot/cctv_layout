@@ -8,7 +8,6 @@ interface LayoutState {
   layout: CanvasLayout | null;
   isLoading: boolean;
   loadLayout: (layoutId: string) => Promise<void>;
-  updateBackgroundOpacity: (opacity: number) => void;
 }
 
 export const useLayoutStore = create<LayoutState>()(
@@ -25,22 +24,6 @@ export const useLayoutStore = create<LayoutState>()(
         console.error('加载布局失败', error);
         set({ isLoading: false });
       }
-    },
-    updateBackgroundOpacity: (opacity: number) => {
-      set((state) => {
-        if (!state.layout) return state;
-        const updated: CanvasLayout = {
-          ...state.layout,
-          backgroundOpacity: opacity,
-          background: state.layout.background
-            ? { ...state.layout.background, opacity }
-            : state.layout.background
-        };
-        useCanvasStore.getState().setBackground(
-          updated.background ? { url: updated.background.url, opacity } : null
-        );
-        return { layout: updated };
-      });
     }
   }))
 );
