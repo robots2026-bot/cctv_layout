@@ -4,6 +4,9 @@ import useImage from 'use-image';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { ConnectionLine } from './ConnectionLine';
 import { DeviceNode } from './DeviceNode';
+import { CanvasContextMenu } from './CanvasContextMenu';
+import { LinkingPreview } from './LinkingPreview';
+import { CanvasLinkingControls } from './CanvasLinkingControls';
 import { DEVICE_DRAG_DATA_FORMAT } from '../../utils/dragDrop';
 import { DeviceSummary } from '../../types/canvas';
 import { useRealtimeStore } from '../../stores/realtimeStore';
@@ -51,6 +54,19 @@ export const CanvasStage = () => {
   }));
   const [image] = useImage(background?.url ?? '', 'anonymous');
   const [dimensions, setDimensions] = useState({ width: viewport.width, height: viewport.height });
+
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.key !== 'Delete') return;
+      const store = useCanvasStore.getState();
+      if (store.selectedConnectionId) {
+        store.removeConnection(store.selectedConnectionId);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
 
   useEffect(() => {
     const resize = () => {
@@ -105,9 +121,14 @@ export const CanvasStage = () => {
       if (!pointer) {
         return;
       }
+      const store = useCanvasStore.getState();
+      if (store.mode !== 'layout') {
+        return;
+      }
+
       const dropPosition = { x: pointer.x, y: pointer.y };
 
-      useCanvasStore.getState().addDeviceToCanvas(device, dropPosition);
+      store.addDeviceToCanvas(device, dropPosition);
       useRealtimeStore.getState().consumeDevice(device.id);
     };
 
@@ -121,7 +142,7 @@ export const CanvasStage = () => {
   }, []);
 
   return (
-    <div className="flex flex-1 overflow-hidden bg-slate-950">
+    <div className="relative flex flex-1 overflow-hidden bg-slate-950">
       <Stage
         ref={stageRef}
         width={dimensions.width}
@@ -132,6 +153,19 @@ export const CanvasStage = () => {
         y={viewport.position.y}
         draggable
         className="cursor-grab"
+        onMouseDown={(event) => {
+          const store = useCanvasStore.getState();
+          const stageNode = stageRef.current;
+          const isStageTarget = stageNode ? event.target === stageNode : false;
+          if (event.evt.button !== 2 && isStageTarget) {
+            store.closeContextMenu();
+            store.selectConnection(null);
+            store.selectElement('');
+          }
+          if (event.evt.button === 0 && isStageTarget && store.linking.active && store.linking.fromElementId) {
+            store.cancelLinking();
+          }
+        }}
         onDragStart={(event: KonvaEventObject<DragEvent>) => {
           const stageNode = stageRef.current;
           if (!stageNode || event.target !== stageNode) {
@@ -154,6 +188,21 @@ export const CanvasStage = () => {
           }
           setViewport({ position: { x: stageNode.x(), y: stageNode.y() } });
           stageNode.container().style.cursor = 'grab';
+        }}
+        onMouseMove={() => {
+          const store = useCanvasStore.getState();
+          if (!store.linking.active || !store.linking.fromElementId) return;
+          const stageNode = stageRef.current;
+          const pointer = stageNode?.getPointerPosition();
+          if (pointer) {
+            store.updateLinkingPointer(pointer);
+          }
+        }}
+        onMouseUp={(event) => {
+          const store = useCanvasStore.getState();
+          if (event.evt.button === 0 && store.linking.active && store.linking.fromElementId) {
+            store.cancelLinking();
+          }
         }}
         onMouseLeave={() => {
           const stageNode = stageRef.current;
@@ -178,14 +227,21 @@ export const CanvasStage = () => {
           </Layer>
         )}
         <Layer>
-          {elements.map((element) => (
-            <DeviceNode key={element.id} element={element} />
-          ))}
           {connections.map((connection) => (
             <ConnectionLine key={connection.id} connection={connection} />
           ))}
         </Layer>
+        <Layer listening={false}>
+          <LinkingPreview />
+        </Layer>
+        <Layer>
+          {elements.map((element) => (
+            <DeviceNode key={element.id} element={element} />
+          ))}
+        </Layer>
       </Stage>
+      <CanvasLinkingControls />
+      <CanvasContextMenu />
     </div>
   );
 };

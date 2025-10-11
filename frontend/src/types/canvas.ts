@@ -18,11 +18,23 @@ export interface CanvasElement {
   selected: boolean;
 }
 
+export interface ConnectionBandwidth {
+  upstreamMbps?: number;
+  downstreamMbps?: number;
+}
+
+export type ConnectionStatus = 'online' | 'offline' | 'warning';
+
 export interface CanvasConnection {
   id: string;
   from: { x: number; y: number };
   to: { x: number; y: number };
   kind: 'wired' | 'wireless';
+  fromDeviceId?: string;
+  toDeviceId?: string;
+  bandwidth?: ConnectionBandwidth;
+  status?: ConnectionStatus;
+  selected?: boolean;
 }
 
 export interface CanvasViewport {
@@ -48,5 +60,5 @@ export interface DeviceSummary {
   name: string;
   type: string;
   ip?: string;
-  status?: 'online' | 'offline' | 'unknown';
+  status?: 'online' | 'offline' | 'warning' | 'unknown';
 }

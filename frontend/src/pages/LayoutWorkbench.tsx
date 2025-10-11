@@ -37,7 +37,7 @@ const LayoutWorkbench = () => {
         <FloatingPropertyPanel />
       </div>
       {!isDevicePanelCollapsed && (
-        <div className="relative flex w-96 flex-col border-l border-slate-800 bg-slate-900/40">
+        <div className="relative flex w-72 flex-col border-l border-slate-800 bg-slate-900/40">
           <button
             type="button"
             onClick={toggleDevicePanel}

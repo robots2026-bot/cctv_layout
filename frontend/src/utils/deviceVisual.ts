@@ -39,27 +39,34 @@ const STATUS_MAP: Record<string, StatusVisual> = {
   online: {
     fill: '#16a34a',
     label: '在线',
-    nodeFill: '#15803d',
+    nodeFill: '#16a34a',
     panelBg: '#1a2e1c',
     textColor: '#ecfdf5',
     secondaryTextColor: '#bbf7d0'
   },
   offline: {
-    fill: '#94a3b8',
+    fill: '#475569',
     label: '离线',
-    nodeFill: '#1e293b',
-    panelBg: '#1c1f26',
+    nodeFill: '#1f2937',
+    panelBg: '#111827',
     textColor: '#e2e8f0',
-    secondaryTextColor: '#cbd5f5'
+    secondaryTextColor: '#94a3b8'
+  },
+  warning: {
+    fill: '#f97316',
+    label: '告警',
+    nodeFill: '#9a3412',
+    panelBg: '#421f0a',
+    textColor: '#fff7ed',
+    secondaryTextColor: '#fed7aa'
   },
   unknown: {
-    fill: '#fbbf24',
-    label: '未知',
-    opacity: 0.75,
-    nodeFill: '#78350f',
-    panelBg: '#2c1f0e',
-    textColor: '#fef3c7',
-    secondaryTextColor: '#fde68a'
+    fill: '#475569',
+    label: '离线',
+    nodeFill: '#1f2937',
+    panelBg: '#111827',
+    textColor: '#e2e8f0',
+    secondaryTextColor: '#94a3b8'
   }
 };
 

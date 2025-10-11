@@ -1,14 +1,15 @@
 import { useCanvasStore } from '../../stores/canvasStore';
 
 const FloatingPropertyPanel = () => {
-  const { hoveredElement } = useCanvasStore((state) => ({
+  const { hoveredElement, linkingActive } = useCanvasStore((state) => ({
     hoveredElement:
       state.hoveredElementId !== null
         ? state.elements.find((element) => element.id === state.hoveredElementId) ?? null
-        : null
+        : null,
+    linkingActive: state.linking.active
   }));
 
-  if (!hoveredElement) {
+  if (!hoveredElement || linkingActive) {
     return null;
   }
 

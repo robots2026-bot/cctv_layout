@@ -30,7 +30,7 @@
 - **组件划分**：
   - 原子组件：按钮、表单、弹窗等，通过 Tailwind 原子类与 Radix UI 组合实现。
   - 画布组件：`CanvasStage`、`DeviceNode`、`ConnectionLine`、`GridBackground`，严格区分展示型与容器型组件。
-  - 侧栏组件：`DevicePalette`（可拖拽列表，使用图形化图标表示设备类别）、`PropertyPanel`、`VersionHistory`。
+  - 侧栏组件：`DevicePalette`（可拖拽列表，使用图形化图标与绿色/深灰背景区分设备在线状态）、`PropertyPanel`、`VersionHistory`。
 - **性能策略**：
   - 使用 `react-konva` 的 `FastLayer` 渲染大量静态图元。
   - 通过 requestAnimationFrame 合并高频拖拽状态更新。
@@ -102,7 +102,7 @@
    - 背景图导入与缩放。
    - 设备元素拖拽放置、旋转、属性编辑（画布卡片仅显示名称/IP，背景随在线状态变色）。
    - 节点悬停展示详情浮窗，左键不再触发选中。
-   - 连线工具：支持自由连线、自动吸附端口。
+   - 连线工具：在“连线模式”下点击两个设备即可创建连接，自动吸附端口并以双轨箭纹展示上下行数据。
    - 图层管理：显示/隐藏不同设备类型、网桥、辅助标记、有线连接、无线连接。
 4. **实时更新与协作**
    - 多用户同时编辑的锁定/合并策略。

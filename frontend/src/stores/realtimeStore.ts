@@ -19,6 +19,7 @@ interface RealtimeState {
   fetchAvailableDevices: (projectId: string) => Promise<void>;
   handleEvent: (message: RealtimeEvent) => void;
   consumeDevice: (deviceId: string) => void;
+  restoreDevice: (device: DeviceSummary) => void;
 }
 
 let socket: WebSocket | null = null;
@@ -72,6 +73,21 @@ export const useRealtimeStore = create<RealtimeState>()(
       set((state) => ({
         availableDevices: state.availableDevices.filter((device) => device.id !== deviceId)
       }));
+    },
+    restoreDevice: (device) => {
+      set((state) => {
+        const exists = state.availableDevices.some((item) => item.id === device.id);
+        if (exists) {
+          return {
+            availableDevices: state.availableDevices.map((item) =>
+              item.id === device.id ? { ...item, ...device } : item
+            )
+          };
+        }
+        return {
+          availableDevices: [...state.availableDevices, device]
+        };
+      });
     },
     handleEvent: (message: RealtimeEvent) => {
       switch (message.event) {

@@ -9,10 +9,10 @@ interface DevicePaletteProps {
   projectId: string;
 }
 
-const DeviceListIcon = ({ category }: { category: DeviceCategory }) => {
+const DeviceListIcon = ({ category, accent }: { category: DeviceCategory; accent: string }) => {
   if (category === 'bridge') {
     return (
-      <svg viewBox="0 0 32 32" className="h-8 w-8 text-sky-300" aria-hidden="true">
+      <svg viewBox="0 0 32 32" className="h-8 w-8" aria-hidden="true" style={{ color: accent }}>
         <rect
           x="12"
           y="4"
@@ -31,7 +31,7 @@ const DeviceListIcon = ({ category }: { category: DeviceCategory }) => {
   }
 
   return (
-    <svg viewBox="0 0 32 32" className="h-8 w-8 text-emerald-300" aria-hidden="true">
+    <svg viewBox="0 0 32 32" className="h-8 w-8" aria-hidden="true" style={{ color: accent }}>
       <rect
         x="6"
         y="8"
@@ -85,27 +85,27 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-slate-800/80 px-4 py-3">
+      <div className="border-b border-slate-800/80 px-3 py-3">
         <h2 className="text-sm font-semibold text-slate-200">未布局设备资源</h2>
         <p className="mt-1 text-xs text-slate-500">拖拽设备到画布即可完成布点。</p>
       </div>
-      <div className="border-b border-slate-800/80 px-4 py-3">
-        <div className="grid grid-cols-3 gap-2 text-center text-xs text-slate-400">
-          <div className="rounded border border-slate-800/80 bg-slate-900/70 px-2 py-2">
+      <div className="border-b border-slate-800/80 px-3 py-2">
+        <div className="grid grid-cols-3 gap-2 text-center text-[11px] text-slate-400">
+          <div className="rounded border border-slate-800/70 bg-slate-900/70 px-2 py-2">
             <div className="text-[10px] uppercase tracking-wide text-slate-500">总数</div>
             <div className="mt-1 text-base font-semibold text-slate-100">{stats.total}</div>
           </div>
-          <div className="rounded border border-slate-800/80 bg-slate-900/70 px-2 py-2">
+          <div className="rounded border border-slate-800/70 bg-slate-900/70 px-2 py-2">
             <div className="text-[10px] uppercase tracking-wide text-slate-500">未布局</div>
             <div className="mt-1 text-base font-semibold text-amber-300">{stats.unplaced}</div>
           </div>
-          <div className="rounded border border-slate-800/80 bg-slate-900/70 px-2 py-2">
+          <div className="rounded border border-slate-800/70 bg-slate-900/70 px-2 py-2">
             <div className="text-[10px] uppercase tracking-wide text-slate-500">已布局</div>
             <div className="mt-1 text-base font-semibold text-emerald-300">{stats.placed}</div>
           </div>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+      <div className="flex-1 overflow-y-auto px-3 py-3">
         {isLoading && (
           <div className="rounded border border-slate-800/80 bg-slate-900/70 px-3 py-2 text-xs text-slate-400">
             获取设备数据...
@@ -125,21 +125,26 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
                 <div
                   draggable
                   onDragStart={(event) => handleDragStart(event, device)}
-                  className="flex w-full cursor-grab items-center gap-2 rounded border border-slate-800/80 bg-slate-900/60 px-2 py-2 text-left transition hover:border-brand-400/80 hover:bg-slate-900 active:cursor-grabbing"
+                  className="flex w-full cursor-grab items-center gap-2 rounded border px-2 py-2 text-left transition hover:ring-2 hover:ring-slate-100/60 active:cursor-grabbing"
+                  style={{
+                    backgroundColor: status.nodeFill,
+                    borderColor: status.fill
+                  }}
                 >
-                  <DeviceListIcon category={category} />
+                  <DeviceListIcon category={category} accent={status.textColor} />
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className="min-w-0 max-w-full truncate text-sm font-medium text-slate-100">
-                        {device.name}
-                      </span>
-                      <span
-                        className="inline-flex h-2.5 w-2.5 flex-shrink-0 rounded-full"
-                        style={{ backgroundColor: status.fill, opacity: status.opacity ?? 1 }}
-                      />
-                      <span className="text-[11px] text-slate-400">{status.label}</span>
-                    </div>
-                    <span className="truncate text-xs text-slate-400">{device.ip ?? '待分配 IP'}</span>
+                    <span
+                      className="min-w-0 max-w-full truncate text-sm font-semibold"
+                      style={{ color: status.textColor }}
+                    >
+                      {device.name}
+                    </span>
+                    <span
+                      className="truncate text-xs"
+                      style={{ color: status.secondaryTextColor }}
+                    >
+                      {device.ip ?? '待分配 IP'}
+                    </span>
                   </div>
                 </div>
               </li>
