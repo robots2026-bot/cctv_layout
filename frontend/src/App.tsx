@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import LayoutWorkbench from './pages/LayoutWorkbench';
-import ProjectOverview from './pages/ProjectOverview';
+import ProjectManagement from './pages/ProjectManagement';
 import ShellLayout from './components/layout/ShellLayout';
 import { useRealtimeConnection } from './hooks/useRealtimeConnection';
 import WorkbenchRedirect from './pages/WorkbenchRedirect';
@@ -15,7 +15,7 @@ const App = () => {
       <Suspense fallback={<div className="flex h-full items-center justify-center">加载中...</div>}>
         <Routes>
           <Route path="/" element={<WorkbenchRedirect />} />
-          <Route path="/projects/manage" element={<ProjectOverview />} />
+          <Route path="/projects/manage" element={<ProjectManagement />} />
           <Route path="/projects/:projectId" element={<ProjectWithoutLayout />} />
           <Route path="/projects/:projectId/layouts/:layoutId" element={<LayoutWorkbench />} />
         </Routes>

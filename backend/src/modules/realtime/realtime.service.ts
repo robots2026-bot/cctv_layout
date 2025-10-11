@@ -32,4 +32,12 @@ export class RealtimeService {
     }
     this.server.to(`project:${projectId}`).emit('layout.version', payload);
   }
+
+  emitProjectsUpdated(payload: { projectId: string; action: 'created' | 'updated' | 'archived' | 'deleted' | 'restored' }) {
+    if (!this.server) {
+      this.logger.warn('Attempted to emit project update without an active server');
+      return;
+    }
+    this.server.emit('projects.updated', payload);
+  }
 }

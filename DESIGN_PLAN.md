@@ -22,6 +22,13 @@
   - 登录/项目概览页：展示项目卡片、最近更新时间、设备总览。
   - 布局工作台：左侧项目导航（含快速搜索，可折叠）+ 中央画布区（Konva Stage）+ 右侧未布局设备面板（可折叠）+ 浮动属性编辑面板。
   - 系统设置页：维护扫描周期、默认图层可见性、团队成员权限。
+- **项目管理界面（新增）**：
+  - 入口 `/projects/manage` 采用“顶部操作条 + 核心列表 + 详情抽屉”布局；顶部展示关键指标（总项目、活跃项目、待归档）与主按钮“新建项目”。
+  - 列表区域采用虚拟化表格：列包含项目名称、站点编号、区域、施工阶段、摄像头数、最后更新、状态标签；支持列宽自适应与排序。
+  - “新建项目”使用右侧滑出抽屉表单，字段含项目名称、站点编号（唯一）、工地位置（地图搜索 + 结构化地址）、施工阶段（planning/construction/completed）、计划上线日期、备注；提交时展示进度及校验提示。
+  - 删除操作通过行内菜单触发二次确认对话框，需输入项目名称或勾选“确认删除”，并提供“归档而非删除”“保留布局快照”选项；成功后局部刷新表格并显示 5 秒撤销 toast。
+  - 顶部搜索框支持名称/编号模糊匹配；列表头部提供状态、阶段、地区筛选器并将筛选参数同步至 URL query，刷新与分享保留上下文。
+  - 对接 `projectStore` 的批量操作（批量归档、批量恢复）通过多选行触发，状态切换与实时在线设备数量展示与 WebSocket 推送保持一致。
 - **状态切片**：
   1. `projectStore`：项目元信息、成员、权限，负责发起 REST 查询。
   2. `canvasStore`：画布元素集合、选择状态、图层可见性、撤销重做栈，封装对 Konva 节点的纯数据操作。
@@ -43,7 +50,7 @@
 ### 2.2 后端架构细化
 - **分层结构**：NestJS `modules` → `controllers`/`resolvers` → `services` → `repositories`/`integrations`，以依赖注入提升可测试性。
 - **核心模块职责**：
-  1. `ProjectsModule`：项目 CRUD、成员与权限管理、操作日志落库。
+  1. `ProjectsModule`：项目 CRUD、成员与权限管理、操作日志落库；暴露 REST 接口 `GET /api/projects`（分页+筛选）、`POST /api/projects`、`PATCH /api/projects/:id`（更新信息/归档）、`DELETE /api/projects/:id`（软删除）、`POST /api/projects/:id/restore`；通过 `ProjectsGateway` 广播 `projects.updated` 事件同步侧边栏与管理列表。
   2. `DevicesModule`：对接扫描器（REST/消息队列），执行设备标准化、幂等写入、状态同步。
   3. `LayoutsModule`：保存画布 JSON、维护版本链、处理冲突合并。
   4. `FilesModule`：处理背景图上传（S3 兼容存储）、生成缩略图、提供受控访问链接。
@@ -65,7 +72,7 @@
 
 ### 2.4 数据流与消息协议
 - **REST API 分层**：
-  - `/api/projects`：项目 CRUD、成员管理、权限配置。
+  - `/api/projects`：分页查询（名称/编号/状态/阶段筛选）、创建、更新、归档、软删除、恢复、批量操作；子资源包含 `/members` 用于成员维护。
   - `/api/devices`：设备列表查询、状态过滤、手动录入、批量导入。
   - `/api/layouts`：布局读取、保存、版本对比、导出任务创建。
   - `/api/files`：背景图上传、签名 URL 获取、删除。
@@ -118,14 +125,17 @@
 1. **设备接入流程**：扫描设备将结果推送的平台后端 → 后端设备同步服务 → 数据库存储/更新 → WebSocket 推送到前端 → 前端设备列表更新。
 2. **布局编辑流程**：用户选中设备 → 拖拽到画布 → 前端生成布局 JSON → 后端保存 → 版本记录与实时广播。
 3. **背景图管理流程**：用户上传 → 后端文件服务存储 → 前端加载 → 用户定位与缩放。
+4. **项目生命周期流程（新增）**：用户在管理界面创建/删除/归档项目 → 前端校验后调用 `ProjectsService` → 事务性写入/更新 `projects`、`project_members`、`activity_logs` → 触发 BullMQ 任务重建默认布局缓存与统计 → WebSocket 广播 `projects.updated` 刷新前端列表与侧边栏。
 
 ## 5. 数据模型草案
-- `projects`：id、name、location、created_at、updated_at。
+- `projects`：id、code（唯一）、name、location_text、location_geo（Point）、stage（planning|construction|completed|archived）、status（active|archived|deleted）、planned_online_at、description、layout_count_cache、device_count_cache、created_by、created_at、updated_at、deleted_at。
+- `project_members`：id、project_id、user_id、role（owner|maintainer|viewer）、invited_at、has_notifications、created_at、updated_at。
 - `devices`：id、project_id、type、name、ip、status、metadata、last_seen_at。
 - `layouts`：id、project_id、name、background_image_url、background_opacity、current_version_id。
 - `layout_versions`：id、layout_id、version_no、elements_json、connections_json、created_by、created_at。
 - `users`：id、name、email、password_hash、role。
 - `activity_logs`：id、project_id、user_id、action、details、created_at。
+- **索引策略**：`projects` 在 `code`、`status`、`deleted_at` 建联合索引，`project_members` 在 `(project_id, user_id)` 建唯一索引，`activity_logs` 在 `project_id`、`created_at` 上建组合索引以支撑审计查询。
 
 ## 6. 非功能性需求
 - **性能**：画布保证 200+ 设备流畅拖拽；WebSocket 推送延迟 < 2s。

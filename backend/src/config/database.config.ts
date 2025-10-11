@@ -6,6 +6,7 @@ import { LayoutEntity } from '../modules/layouts/entities/layout.entity';
 import { LayoutVersionEntity } from '../modules/layouts/entities/layout-version.entity';
 import { UserEntity } from '../modules/auth/entities/user.entity';
 import { ActivityLogEntity } from '../modules/activity-log/entities/activity-log.entity';
+import { ProjectMemberEntity } from '../modules/projects/entities/project-member.entity';
 
 export default registerAs('database', (): TypeOrmModuleOptions => ({
   type: 'postgres',
@@ -18,6 +19,7 @@ export default registerAs('database', (): TypeOrmModuleOptions => ({
   logging: process.env.TYPEORM_LOGGING === 'true',
   entities: [
     ProjectEntity,
+    ProjectMemberEntity,
     DeviceEntity,
     LayoutEntity,
     LayoutVersionEntity,

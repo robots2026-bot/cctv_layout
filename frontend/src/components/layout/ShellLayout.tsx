@@ -32,8 +32,9 @@ const ShellLayout = ({ children }: PropsWithChildren) => {
     const term = searchTerm.toLowerCase();
     return projects.filter((project) => {
       const nameMatch = project.name.toLowerCase().includes(term);
-      const locationMatch = project.location?.toLowerCase().includes(term) ?? false;
-      return nameMatch || locationMatch;
+      const locationMatch = project.locationText?.toLowerCase().includes(term) ?? false;
+      const codeMatch = project.code.toLowerCase().includes(term);
+      return nameMatch || locationMatch || codeMatch;
     });
   }, [projects, searchTerm]);
 
@@ -127,7 +128,7 @@ const ShellLayout = ({ children }: PropsWithChildren) => {
                       }`}
                     >
                       <div className="text-sm font-medium leading-5">{project.name}</div>
-                      <div className="text-xs text-slate-400">{project.location ?? '未设置地点'}</div>
+                      <div className="text-xs text-slate-400">{project.locationText ?? '未设置地点'}</div>
                     </Link>
                   );
                 })}

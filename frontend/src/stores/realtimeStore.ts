@@ -3,12 +3,18 @@ import { devtools } from 'zustand/middleware';
 import { apiClient } from '../utils/apiClient';
 import { DeviceSummary } from '../types/canvas';
 import { useCanvasStore } from './canvasStore';
+import { useProjectStore } from './projectStore';
+import { useProjectManagementStore } from './projectManagementStore';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
 type RealtimeEvent =
   | { event: 'device.update'; payload: DeviceSummary }
-  | { event: 'presence.sync'; payload: { users: string[] } };
+  | { event: 'presence.sync'; payload: { users: string[] } }
+  | {
+      event: 'projects.updated';
+      payload: { projectId: string; action: 'created' | 'updated' | 'archived' | 'deleted' | 'restored' };
+    };
 
 interface RealtimeState {
   connectionState: ConnectionState;
@@ -114,6 +120,11 @@ export const useRealtimeStore = create<RealtimeState>()(
         }
         case 'presence.sync': {
           set({ onlineUsers: message.payload.users });
+          break;
+        }
+        case 'projects.updated': {
+          void useProjectStore.getState().fetchProjects({ silent: true });
+          void useProjectManagementStore.getState().fetchProjects();
           break;
         }
         default:
