@@ -1,18 +1,19 @@
-import { PropsWithChildren, useEffect } from 'react';
+import { PropsWithChildren, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useRealtimeStore } from '../../stores/realtimeStore';
-import { useUIStore } from '../../stores/uiStore';
 import { useProjectStore } from '../../stores/projectStore';
+import { useUIStore } from '../../stores/uiStore';
 
 const ShellLayout = ({ children }: PropsWithChildren) => {
   const connectionState = useRealtimeStore((state) => state.connectionState);
-  const notifications = useUIStore((state) => state.notifications);
+  const notificationCount = useUIStore((state) => state.notifications.length);
   const { projects, fetchProjects, isLoading } = useProjectStore((state) => ({
     projects: state.projects,
     fetchProjects: state.fetchProjects,
     isLoading: state.isLoading
   }));
   const location = useLocation();
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     if (!isLoading && projects.length === 0) {
@@ -20,26 +21,47 @@ const ShellLayout = ({ children }: PropsWithChildren) => {
     }
   }, [fetchProjects, isLoading, projects.length]);
 
+  const filteredProjects = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return projects;
+    }
+    const term = searchTerm.toLowerCase();
+    return projects.filter((project) => {
+      const nameMatch = project.name.toLowerCase().includes(term);
+      const locationMatch = project.location?.toLowerCase().includes(term) ?? false;
+      return nameMatch || locationMatch;
+    });
+  }, [projects, searchTerm]);
+
   return (
     <div className="flex h-screen w-full flex-col bg-slate-950">
       <header className="flex items-center justify-between border-b border-slate-800 bg-slate-900/60 px-6 py-4">
-        <Link to="/projects" className="text-xl font-semibold text-white">
+        <Link to="/" className="text-xl font-semibold text-white">
           CCTV 布局平台
         </Link>
-        <div className="flex items-center gap-4 text-sm text-slate-300">
-          <span>
-            实时连接：
-            <span
-              className={
-                connectionState === 'connected'
-                  ? 'text-emerald-400'
-                  : connectionState === 'connecting'
-                  ? 'text-amber-400'
-                  : 'text-rose-400'
-              }
-            >
-              {connectionState}
+        <div className="flex items-center gap-3 text-sm text-slate-300">
+          <Link
+            to="/projects/manage"
+            className="rounded border border-slate-700/70 bg-slate-900/60 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-brand-400/80 hover:text-white"
+          >
+            项目管理
+          </Link>
+            <span>
+              实时连接：
+              <span
+                className={
+                  connectionState === 'connected'
+                    ? 'text-emerald-400'
+                    : connectionState === 'connecting'
+                    ? 'text-amber-400'
+                    : 'text-rose-400'
+                }
+              >
+                {connectionState}
+              </span>
             </span>
+          <span className="rounded border border-slate-800 bg-slate-900/80 px-2 py-1 text-xs text-slate-400">
+            通知 {notificationCount}
           </span>
         </div>
       </header>
@@ -49,13 +71,25 @@ const ShellLayout = ({ children }: PropsWithChildren) => {
             <h2 className="text-sm font-semibold text-slate-200">项目</h2>
             {isLoading && <span className="text-xs text-slate-500">加载中...</span>}
           </div>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="快速搜索项目..."
+            className="mt-3 w-full rounded border border-slate-800/80 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-brand-400/80 focus:outline-none"
+          />
           <div className="mt-3 space-y-1 overflow-y-auto pr-1 text-sm text-slate-300">
             {projects.length === 0 && !isLoading && (
               <div className="rounded border border-dashed border-slate-700/60 bg-slate-900/60 p-3 text-xs text-slate-500">
                 尚未创建项目
               </div>
             )}
-            {projects.map((project) => {
+            {projects.length > 0 && filteredProjects.length === 0 && (
+              <div className="rounded border border-dashed border-slate-700/60 bg-slate-900/60 p-3 text-xs text-slate-500">
+                无匹配的项目
+              </div>
+            )}
+            {filteredProjects.map((project) => {
               const target = project.defaultLayoutId
                 ? `/projects/${project.id}/layouts/${project.defaultLayoutId}`
                 : `/projects/${project.id}`;
@@ -76,18 +110,6 @@ const ShellLayout = ({ children }: PropsWithChildren) => {
           </div>
         </aside>
         <div className="relative flex-1 overflow-hidden">{children}</div>
-        <aside className="w-80 border-l border-slate-800 bg-slate-900/40 p-4">
-          <h2 className="text-sm font-semibold text-slate-200">通知</h2>
-          <ul className="mt-3 space-y-2 text-xs text-slate-400">
-            {notifications.length === 0 && <li>暂无通知</li>}
-            {notifications.map((notification) => (
-              <li key={notification.id} className="rounded border border-slate-800/80 bg-slate-900/60 p-2">
-                <div className="font-medium text-slate-200">{notification.title}</div>
-                <div>{notification.message}</div>
-              </li>
-            ))}
-          </ul>
-        </aside>
       </main>
     </div>
   );

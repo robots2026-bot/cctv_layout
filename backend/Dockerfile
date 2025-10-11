@@ -11,4 +11,4 @@ COPY tsconfig.json tsconfig.build.json nest-cli.json jest.config.ts ./
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start:dev"]
+CMD ["npm", "run", "start"]

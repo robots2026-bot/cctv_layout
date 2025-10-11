@@ -1,4 +1,6 @@
 # AGENTS 指南
+- 开发测试须以 Docker Compose 为主：后端、前端、PostgreSQL、Redis 均通过 `docker compose up` 启动，避免宿主机 Node 版本等环境差异干扰调试。如需仅验证接口，可单独启 `compose` 的 `postgres`、`redis`、`backend` 服务。
+- npm/yarn/pnpm 等包管理操作（安装依赖、构建、测试）默认在对应容器里执行，避免宿主机 Node 版本与编译环境不一致。
 
 ## 项目定位
 - 本仓库用于构建工地 CCTV 与网桥快速布局平台，必须支持设备自动扫描、画布拖拽连线及背景图透明度调节等核心功能。
