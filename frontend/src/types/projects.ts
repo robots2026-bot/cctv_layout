@@ -50,7 +50,7 @@ export interface CreateProjectPayload {
   region?: string;
   location?: ProjectLocationPayload;
   stage?: ProjectStage;
-  plannedOnlineAt?: string | null;
+  plannedOnlineAt?: string;
   description?: string;
   includeDefaultMembership?: boolean;
   createdBy?: string;

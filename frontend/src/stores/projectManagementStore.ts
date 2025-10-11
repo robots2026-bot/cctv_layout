@@ -151,8 +151,50 @@ export const useProjectManagementStore = create<ProjectManagementState>()(
 
       createProject: async (payload) => {
         try {
-          await apiClient.post('/projects', payload);
-          notify('项目已创建', `项目 ${payload.name} 创建成功。`, 'info');
+          const body: Record<string, unknown> = {
+            name: payload.name.trim(),
+            code: payload.code.trim(),
+            includeDefaultMembership: payload.includeDefaultMembership ?? true
+          };
+
+          if (payload.stage) {
+            body.stage = payload.stage;
+          }
+
+          if (payload.region?.trim()) {
+            body.region = payload.region.trim();
+          }
+
+          if (payload.description?.trim()) {
+            body.description = payload.description.trim();
+          }
+
+          if (payload.plannedOnlineAt) {
+            body.plannedOnlineAt = payload.plannedOnlineAt;
+          }
+
+          if (payload.createdBy) {
+            body.createdBy = payload.createdBy;
+          }
+
+          if (payload.location) {
+            const location: Record<string, unknown> = {};
+            if (payload.location.text?.trim()) {
+              location.text = payload.location.text.trim();
+            }
+            if (typeof payload.location.lat === 'number' && !Number.isNaN(payload.location.lat)) {
+              location.lat = payload.location.lat;
+            }
+            if (typeof payload.location.lng === 'number' && !Number.isNaN(payload.location.lng)) {
+              location.lng = payload.location.lng;
+            }
+            if (Object.keys(location).length > 0) {
+              body.location = location;
+            }
+          }
+
+          await apiClient.post('/projects', body);
+          notify('项目已创建', `项目 ${payload.name.trim()} 创建成功。`, 'info');
           await get().fetchProjects();
           await useProjectStore.getState().fetchProjects({ silent: true });
         } catch (error) {

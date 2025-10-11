@@ -91,7 +91,7 @@ const ProjectManagement = () => {
     region: '',
     stage: 'planning',
     location: { text: '', lat: undefined, lng: undefined },
-    plannedOnlineAt: null,
+    plannedOnlineAt: undefined,
     description: '',
     includeDefaultMembership: true
   });
@@ -165,7 +165,7 @@ const ProjectManagement = () => {
       region: '',
       stage: 'planning',
       location: { text: '', lat: undefined, lng: undefined },
-      plannedOnlineAt: null,
+      plannedOnlineAt: undefined,
       description: '',
       includeDefaultMembership: true
     });
@@ -754,7 +754,9 @@ const CreateProjectDrawer = ({ open, onClose, form, onChange, onSubmit, isSubmit
                 <FormField label="计划上线日期">
                   <input
                     value={form.plannedOnlineAt ?? ''}
-                    onChange={(event) => onChange({ ...form, plannedOnlineAt: event.target.value || null })}
+                    onChange={(event) =>
+                      onChange({ ...form, plannedOnlineAt: event.target.value || undefined })
+                    }
                     type="date"
                     className="w-full rounded border border-slate-800/80 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 focus:border-brand-400/80 focus:outline-none"
                   />
