@@ -32,8 +32,8 @@ export class ProjectEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ length: 12, unique: true })
-  code!: string;
+  @Column({ type: 'smallint', unique: true })
+  code!: number;
 
   @Column({ length: 120 })
   name!: string;

@@ -8,6 +8,7 @@ import { LayoutVersionEntity } from './entities/layout-version.entity';
 import { SaveLayoutVersionDto } from './dto/save-layout-version.dto';
 import { ActivityLogService } from '../activity-log/activity-log.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { ProjectEntity } from '../projects/entities/project.entity';
 
 export interface LayoutDetail {
   id: string;
@@ -26,6 +27,8 @@ export class LayoutsService {
     private readonly layoutsRepository: Repository<LayoutEntity>,
     @InjectRepository(LayoutVersionEntity)
     private readonly versionsRepository: Repository<LayoutVersionEntity>,
+    @InjectRepository(ProjectEntity)
+    private readonly projectsRepository: Repository<ProjectEntity>,
     private readonly activityLogService: ActivityLogService,
     private readonly realtimeService: RealtimeService
   ) {}
@@ -72,6 +75,15 @@ export class LayoutsService {
       backgroundImageUrl: dto.backgroundImageUrl
     });
     const saved = await this.layoutsRepository.save(layout);
+
+    await this.projectsRepository
+      .createQueryBuilder()
+      .update(ProjectEntity)
+      .set({ defaultLayoutId: saved.id })
+      .where('id = :projectId', { projectId: dto.projectId })
+      .andWhere('default_layout_id IS NULL')
+      .execute();
+
     await this.activityLogService.record({
       projectId: saved.projectId,
       action: 'layout.create',

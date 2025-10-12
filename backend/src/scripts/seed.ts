@@ -104,14 +104,16 @@ async function seed() {
       await manager.save(engineerUser);
 
       const projectOne = manager.create(ProjectEntity, {
+        code: 0,
         name: '工地一期总控',
-        location: '苏州 · 一号工地'
+        locationText: '苏州 · 一号工地'
       });
       await manager.save(projectOne);
 
       const projectTwo = manager.create(ProjectEntity, {
+        code: 1,
         name: '仓库联网规划',
-        location: '上海 · 仓储中心'
+        locationText: '上海 · 仓储中心'
       });
       await manager.save(projectTwo);
 

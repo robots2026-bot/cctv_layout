@@ -1,11 +1,13 @@
 import {
   IsBoolean,
   IsDateString,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
-  Matches,
+  Max,
   MaxLength,
+  Min,
   ValidateNested
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -35,11 +37,11 @@ export class CreateProjectDto {
   @MaxLength(120)
   name!: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(12)
-  @Matches(/^[A-Z0-9-]{3,12}$/)
-  code!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(255)
+  code!: number;
 
   @IsString()
   @IsOptional()

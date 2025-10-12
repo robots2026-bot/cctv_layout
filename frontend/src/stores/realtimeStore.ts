@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { io, Socket } from 'socket.io-client';
 import { apiClient } from '../utils/apiClient';
 import { DeviceSummary } from '../types/canvas';
 import { useCanvasStore } from './canvasStore';
@@ -28,7 +29,7 @@ interface RealtimeState {
   restoreDevice: (device: DeviceSummary) => void;
 }
 
-let socket: WebSocket | null = null;
+let socket: Socket | null = null;
 
 export const useRealtimeStore = create<RealtimeState>()(
   devtools((set) => ({
@@ -36,27 +37,40 @@ export const useRealtimeStore = create<RealtimeState>()(
     availableDevices: [],
     onlineUsers: [],
     connect: () => {
-      if (typeof window === 'undefined') {
-        return;
-      }
-      if (socket && socket.readyState === WebSocket.OPEN) return;
+      if (typeof window === 'undefined') return;
+      if (socket && socket.connected) return;
+
+      const baseUrl =
+        (import.meta.env.VITE_REALTIME_URL as string | undefined) ?? 'http://localhost:3000';
+
       set({ connectionState: 'connecting' });
-      const wsUrl = (import.meta.env.VITE_REALTIME_URL as string | undefined) ?? 'ws://localhost:3000/realtime';
-      socket = new WebSocket(wsUrl);
-      socket.onopen = () => set({ connectionState: 'connected' });
-      socket.onclose = () => set({ connectionState: 'disconnected' });
-      socket.onerror = () => set({ connectionState: 'disconnected' });
-      socket.onmessage = (event) => {
-        try {
-          const parsed = JSON.parse(event.data) as RealtimeEvent;
-          useRealtimeStore.getState().handleEvent(parsed);
-        } catch (error) {
-          console.error('解析实时消息失败', error);
-        }
-      };
+      socket = io(baseUrl, {
+        path: import.meta.env.VITE_REALTIME_PATH ?? '/realtime',
+        transports: ['websocket']
+      });
+
+      socket.on('connect', () => {
+        set({ connectionState: 'connected' });
+      });
+
+      socket.on('disconnect', () => {
+        set({ connectionState: 'disconnected' });
+      });
+
+      socket.on('connect_error', (error) => {
+        console.error('实时连接失败', error);
+        set({ connectionState: 'disconnected' });
+      });
+
+      socket.onAny((event, payload) => {
+        if (!event) return;
+        const message = { event, payload } as RealtimeEvent;
+        useRealtimeStore.getState().handleEvent(message);
+      });
     },
     disconnect: () => {
-      socket?.close();
+      socket?.removeAllListeners();
+      socket?.disconnect();
       socket = null;
       set({ connectionState: 'disconnected' });
     },

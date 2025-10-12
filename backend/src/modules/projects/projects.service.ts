@@ -4,11 +4,7 @@ import {
   NotFoundException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  In,
-  Point,
-  Repository
-} from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { ActivityLogService } from '../activity-log/activity-log.service';
 import {
   ProjectEntity,
@@ -16,6 +12,7 @@ import {
   ProjectStatus
 } from './entities/project.entity';
 import { ProjectMemberEntity } from './entities/project-member.entity';
+import { LayoutEntity } from '../layouts/entities/layout.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { ProjectQueryDto } from './dto/project-query.dto';
@@ -23,6 +20,36 @@ import { DeleteProjectDto } from './dto/delete-project.dto';
 import { RestoreProjectDto } from './dto/restore-project.dto';
 import { ProjectBulkActionDto, ProjectBulkActionType } from './dto/project-bulk-action.dto';
 import { RealtimeService } from '../realtime/realtime.service';
+
+export interface ProjectDetailResponse {
+  id: string;
+  code: number;
+  name: string;
+  region?: string | null;
+  locationText?: string | null;
+  stage: ProjectStage;
+  status: ProjectStatus;
+  plannedOnlineAt?: string | null;
+  description?: string | null;
+  defaultLayoutId?: string | null;
+  layoutCount: number;
+  deviceCount: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+  members: Array<{
+    id: string;
+    role: string;
+    invitedAt?: string | null;
+    hasNotifications: boolean;
+    user: { id: string; name: string; email: string } | null;
+  }>;
+  recentLayouts: Array<{
+    id: string;
+    name: string;
+    updatedAt: string;
+  }>;
+}
 
 export interface ProjectListResponse {
   items: ProjectEntity[];
@@ -47,6 +74,8 @@ export class ProjectsService {
     private readonly projectsRepository: Repository<ProjectEntity>,
     @InjectRepository(ProjectMemberEntity)
     private readonly projectMembersRepository: Repository<ProjectMemberEntity>,
+    @InjectRepository(LayoutEntity)
+    private readonly layoutsRepository: Repository<LayoutEntity>,
     private readonly activityLogService: ActivityLogService,
     private readonly realtimeService: RealtimeService
   ) {}
@@ -69,14 +98,21 @@ export class ProjectsService {
     if (query.region) {
       baseQb.andWhere('project.region ILIKE :region', { region: `%${query.region}%` });
     }
+    if (query.codeGte !== undefined) {
+      baseQb.andWhere('project.code >= :codeGte', { codeGte: query.codeGte });
+    }
+    if (query.codeLte !== undefined) {
+      baseQb.andWhere('project.code <= :codeLte', { codeLte: query.codeLte });
+    }
     if (query.keyword) {
       const keyword = `%${query.keyword}%`;
-      baseQb.andWhere('(project.name ILIKE :keyword OR project.code ILIKE :keyword)', { keyword });
+      baseQb.andWhere('(project.name ILIKE :keyword OR project.code::text ILIKE :keyword)', { keyword });
     }
 
     const dataQb = baseQb.clone();
-    dataQb.leftJoinAndSelect('project.members', 'members');
-    dataQb.orderBy('project.updatedAt', 'DESC');
+    const orderByField = query.orderBy === 'name' ? 'project.name' : 'project.updatedAt';
+    const orderDirection = query.order?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+    dataQb.orderBy(orderByField, orderDirection);
     dataQb.skip((page - 1) * pageSize);
     dataQb.take(pageSize);
     dataQb.loadRelationCountAndMap('project.layoutCount', 'project.layouts');
@@ -117,10 +153,9 @@ export class ProjectsService {
     };
   }
 
-  async findOne(id: string): Promise<ProjectEntity> {
+  async findOne(id: string): Promise<ProjectDetailResponse> {
     const project = await this.projectsRepository
       .createQueryBuilder('project')
-      .leftJoinAndSelect('project.members', 'members')
       .where('project.id = :id', { id })
       .loadRelationCountAndMap('project.layoutCount', 'project.layouts')
       .loadRelationCountAndMap('project.deviceCount', 'project.devices')
@@ -129,11 +164,64 @@ export class ProjectsService {
     if (!project) {
       throw new NotFoundException(`Project ${id} not found`);
     }
-    return project;
+
+    const members = await this.projectMembersRepository.find({
+      where: { projectId: id },
+      relations: ['user'],
+      order: { createdAt: 'ASC' }
+    });
+
+    const recentLayoutsRaw = await this.layoutsRepository.find({
+      where: { projectId: id },
+      order: { updatedAt: 'DESC' },
+      take: 5,
+      select: ['id', 'name', 'updatedAt']
+    });
+
+    if (!project.defaultLayoutId && recentLayoutsRaw.length > 0) {
+      project.defaultLayoutId = recentLayoutsRaw[0].id;
+      await this.projectsRepository.update(project.id, { defaultLayoutId: project.defaultLayoutId });
+    }
+
+    return {
+      id: project.id,
+      code: project.code,
+      name: project.name,
+      region: project.region ?? null,
+      locationText: project.locationText ?? null,
+      stage: project.stage,
+      status: project.status,
+      plannedOnlineAt: project.plannedOnlineAt ? project.plannedOnlineAt.toISOString() : null,
+      description: project.description ?? null,
+      defaultLayoutId: project.defaultLayoutId ?? null,
+      layoutCount: project.layoutCount ?? 0,
+      deviceCount: project.deviceCount ?? 0,
+      createdAt: project.createdAt.toISOString(),
+      updatedAt: project.updatedAt.toISOString(),
+      deletedAt: project.deletedAt ? project.deletedAt.toISOString() : null,
+      members: members.map((member) => ({
+        id: member.id,
+        role: member.role,
+        invitedAt: member.invitedAt ? member.invitedAt.toISOString() : null,
+        hasNotifications: member.hasNotifications,
+        user: member.user
+          ? {
+              id: member.user.id,
+              name: member.user.name,
+              email: member.user.email
+            }
+          : null
+      })),
+      recentLayouts: recentLayoutsRaw.map((layout) => ({
+        id: layout.id,
+        name: layout.name,
+        updatedAt: layout.updatedAt.toISOString()
+      }))
+    };
   }
 
-  async create(dto: CreateProjectDto): Promise<ProjectEntity> {
-    const existingCode = await this.projectsRepository.findOne({ where: { code: dto.code.toUpperCase() } });
+  async create(dto: CreateProjectDto): Promise<ProjectDetailResponse> {
+    const existingCode = await this.projectsRepository.findOne({ where: { code: dto.code } });
     if (existingCode) {
       throw new ConflictException(`Project code ${dto.code} already exists`);
     }
@@ -141,7 +229,7 @@ export class ProjectsService {
     const locationGeo = this.resolveLocationPoint(dto.location);
 
     const project = this.projectsRepository.create({
-      code: dto.code.toUpperCase(),
+      code: dto.code,
       name: dto.name,
       region: dto.region ?? null,
       locationText: dto.location?.text ?? null,
@@ -172,15 +260,15 @@ export class ProjectsService {
     return this.findOne(saved.id);
   }
 
-  async update(id: string, dto: UpdateProjectDto): Promise<ProjectEntity> {
-    const project = await this.findOne(id);
+  async update(id: string, dto: UpdateProjectDto): Promise<ProjectDetailResponse> {
+    const project = await this.loadProjectEntity(id);
 
-    if (dto.code && dto.code.toUpperCase() !== project.code) {
-      const exists = await this.projectsRepository.findOne({ where: { code: dto.code.toUpperCase() } });
+    if (dto.code !== undefined && dto.code !== project.code) {
+      const exists = await this.projectsRepository.findOne({ where: { code: dto.code } });
       if (exists) {
         throw new ConflictException(`Project code ${dto.code} already exists`);
       }
-      project.code = dto.code.toUpperCase();
+      project.code = dto.code;
     }
 
     if (dto.name) {
@@ -232,7 +320,7 @@ export class ProjectsService {
   }
 
   async softDelete(id: string, dto: DeleteProjectDto): Promise<void> {
-    const project = await this.findOne(id);
+    const project = await this.loadProjectEntity(id);
     if (project.status === ProjectStatus.DELETED) {
       return;
     }
@@ -258,8 +346,8 @@ export class ProjectsService {
     // TODO: integrate layout archiving and device detaching pipelines
   }
 
-  async restore(id: string, dto: RestoreProjectDto): Promise<ProjectEntity> {
-    const project = await this.findOne(id);
+  async restore(id: string, dto: RestoreProjectDto): Promise<ProjectDetailResponse> {
+    const project = await this.loadProjectEntity(id);
     project.status = ProjectStatus.ACTIVE;
     project.deletedAt = null;
     const saved = await this.projectsRepository.save(project);
@@ -326,6 +414,14 @@ export class ProjectsService {
     }
 
     return { affected: projects.length };
+  }
+
+  private async loadProjectEntity(id: string): Promise<ProjectEntity> {
+    const entity = await this.projectsRepository.findOne({ where: { id } });
+    if (!entity) {
+      throw new NotFoundException(`Project ${id} not found`);
+    }
+    return entity;
   }
 
   private resolveLocationPoint(

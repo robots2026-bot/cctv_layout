@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { ProjectListResponse, ProjectsService } from './projects.service';
+import { ProjectDetailResponse, ProjectListResponse, ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { ProjectQueryDto } from './dto/project-query.dto';
@@ -17,17 +17,17 @@ export class ProjectsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id') id: string): Promise<ProjectDetailResponse> {
     return this.projectsService.findOne(id);
   }
 
   @Post()
-  create(@Body() dto: CreateProjectDto) {
+  create(@Body() dto: CreateProjectDto): Promise<ProjectDetailResponse> {
     return this.projectsService.create(dto);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateProjectDto) {
+  update(@Param('id') id: string, @Body() dto: UpdateProjectDto): Promise<ProjectDetailResponse> {
     return this.projectsService.update(id, dto);
   }
 
@@ -37,7 +37,7 @@ export class ProjectsController {
   }
 
   @Post(':id/restore')
-  restore(@Param('id') id: string, @Body() dto: RestoreProjectDto) {
+  restore(@Param('id') id: string, @Body() dto: RestoreProjectDto): Promise<ProjectDetailResponse> {
     return this.projectsService.restore(id, dto);
   }
 

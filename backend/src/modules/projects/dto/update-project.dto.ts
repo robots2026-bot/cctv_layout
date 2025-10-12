@@ -1,7 +1,8 @@
 import { PartialType } from '@nestjs/mapped-types';
 import { CreateProjectDto } from './create-project.dto';
-import { IsEnum, IsOptional, IsString, MaxLength, Matches } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { ProjectStage, ProjectStatus } from '../entities/project.entity';
+import { Type } from 'class-transformer';
 
 export class UpdateProjectDto extends PartialType(CreateProjectDto) {
   @IsEnum(ProjectStatus)
@@ -13,11 +14,12 @@ export class UpdateProjectDto extends PartialType(CreateProjectDto) {
   @MaxLength(120)
   name?: string;
 
-  @IsString()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(255)
   @IsOptional()
-  @MaxLength(12)
-  @Matches(/^[A-Z0-9-]{3,12}$/)
-  code?: string;
+  code?: number;
 
   @IsEnum(ProjectStage)
   @IsOptional()

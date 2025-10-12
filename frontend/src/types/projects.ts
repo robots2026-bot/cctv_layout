@@ -3,7 +3,7 @@ export type ProjectStatus = 'active' | 'archived' | 'deleted';
 
 export interface ProjectListItem {
   id: string;
-  code: string;
+  code: number;
   name: string;
   region?: string | null;
   locationText?: string | null;
@@ -64,4 +64,28 @@ export interface DeleteProjectOptions {
   reason?: string;
   archiveLayouts?: boolean;
   keepDeviceMappings?: boolean;
+}
+
+export interface ProjectMemberSummary {
+  id: string;
+  role: 'owner' | 'maintainer' | 'viewer' | string;
+  invitedAt?: string | null;
+  hasNotifications: boolean;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
+}
+
+export interface ProjectRecentLayout {
+  id: string;
+  name: string;
+  updatedAt: string;
+}
+
+export interface ProjectDetail extends ProjectListItem {
+  createdAt: string;
+  members: ProjectMemberSummary[];
+  recentLayouts: ProjectRecentLayout[];
 }

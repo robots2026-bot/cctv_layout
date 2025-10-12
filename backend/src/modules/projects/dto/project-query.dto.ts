@@ -1,5 +1,15 @@
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min
+} from 'class-validator';
 import { ProjectStage, ProjectStatus } from '../entities/project.entity';
 
 export class ProjectQueryDto {
@@ -13,7 +23,7 @@ export class ProjectQueryDto {
   @IsNumber()
   @IsOptional()
   @Min(1)
-  @Max(100)
+  @Max(200)
   pageSize = 20;
 
   @IsString()
@@ -38,4 +48,28 @@ export class ProjectQueryDto {
   @IsBoolean()
   @IsOptional()
   includeDeleted?: boolean;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Max(255)
+  codeGte?: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Max(255)
+  codeLte?: number;
+
+  @IsString()
+  @IsOptional()
+  @IsIn(['name', 'updatedAt'])
+  orderBy?: 'name' | 'updatedAt';
+
+  @IsString()
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  order?: 'asc' | 'desc';
 }
