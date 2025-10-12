@@ -1,8 +1,8 @@
 import { Arrow, Group, Label, Line, Tag, Text } from 'react-konva';
-import { useMemo } from 'react';
 import { CanvasConnection } from '../../types/canvas';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { getStatusVisual } from '../../utils/deviceVisual';
+import type { KonvaEventObject } from 'konva/lib/Node';
 
 interface ConnectionLineProps {
   connection: CanvasConnection;
@@ -11,6 +11,64 @@ interface ConnectionLineProps {
 const LABEL_OFFSET = 12;
 const ARROW_LENGTH = 16;
 const TRACK_OFFSET = 5;
+const ARROW_POSITIONS = [0.35, 0.7];
+
+interface Point {
+  x: number;
+  y: number;
+}
+
+interface ConnectionSegments {
+  upstream: { start: Point; end: Point };
+  downstream: { start: Point; end: Point };
+  baseDash?: number[];
+  length: number;
+}
+
+const calculateConnectionSegments = (
+  fromPoint: Point,
+  toPoint: Point,
+  kind: CanvasConnection['kind']
+): ConnectionSegments | null => {
+  const dx = toPoint.x - fromPoint.x;
+  const dy = toPoint.y - fromPoint.y;
+  const baseLength = Math.hypot(dx, dy);
+
+  if (baseLength === 0) {
+    return null;
+  }
+
+  const dir = { x: dx / baseLength, y: dy / baseLength };
+  const normal = { x: -dir.y, y: dir.x };
+  const offsetVec = {
+    x: normal.x * TRACK_OFFSET,
+    y: normal.y * TRACK_OFFSET
+  };
+
+  const upstreamStart = {
+    x: fromPoint.x + offsetVec.x,
+    y: fromPoint.y + offsetVec.y
+  };
+  const upstreamEnd = {
+    x: toPoint.x + offsetVec.x,
+    y: toPoint.y + offsetVec.y
+  };
+  const downstreamStart = {
+    x: toPoint.x - offsetVec.x,
+    y: toPoint.y - offsetVec.y
+  };
+  const downstreamEnd = {
+    x: fromPoint.x - offsetVec.x,
+    y: fromPoint.y - offsetVec.y
+  };
+
+  return {
+    upstream: { start: upstreamStart, end: upstreamEnd },
+    downstream: { start: downstreamStart, end: downstreamEnd },
+    baseDash: kind === 'wireless' ? [12, 8] : undefined,
+    length: baseLength
+  };
+};
 
 export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
   const { elements, selectConnection, mode } = useCanvasStore((state) => ({
@@ -42,55 +100,14 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
     return null;
   }
 
-  const dx = toPoint.x - fromPoint.x;
-  const dy = toPoint.y - fromPoint.y;
-  const baseLength = Math.hypot(dx, dy);
-
-  const { upstream, downstream, baseDash, length } = useMemo(() => {
-    if (baseLength === 0) {
-      return {
-        upstream: null,
-        downstream: null,
-        baseDash: undefined,
-        length: 0
-      };
-    }
-
-    const dir = { x: dx / baseLength, y: dy / baseLength };
-    const normal = { x: -dir.y, y: dir.x };
-    const offsetVec = {
-      x: normal.x * TRACK_OFFSET,
-      y: normal.y * TRACK_OFFSET
-    };
-
-    const upstreamStart = {
-      x: fromPoint.x + offsetVec.x,
-      y: fromPoint.y + offsetVec.y
-    };
-    const upstreamEnd = {
-      x: toPoint.x + offsetVec.x,
-      y: toPoint.y + offsetVec.y
-    };
-    const downstreamStart = {
-      x: toPoint.x - offsetVec.x,
-      y: toPoint.y - offsetVec.y
-    };
-    const downstreamEnd = {
-      x: fromPoint.x - offsetVec.x,
-      y: fromPoint.y - offsetVec.y
-    };
-
-    return {
-      upstream: { start: upstreamStart, end: upstreamEnd },
-      downstream: { start: downstreamStart, end: downstreamEnd },
-      baseDash: connection.kind === 'wireless' ? [12, 8] : undefined,
-      length: baseLength
-    };
-  }, [dx, dy, connection.kind, baseLength, fromPoint.x, fromPoint.y, toPoint.x, toPoint.y]);
-
-  if (!upstream || !downstream || length === 0) {
+  const segments = calculateConnectionSegments(fromPoint, toPoint, connection.kind);
+  if (!segments) {
     return null;
   }
+
+  const { upstream, downstream, baseDash, length } = segments;
+  const dx = toPoint.x - fromPoint.x;
+  const dy = toPoint.y - fromPoint.y;
 
   const status = getStatusVisual(connection.status ?? 'online');
 
@@ -107,8 +124,6 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
     end.x,
     end.y
   ];
-
-  const arrowPositions = useMemo(() => [0.35, 0.7], []);
 
   const pointAt = (
     start: { x: number; y: number },
@@ -164,7 +179,7 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
     y: dy / length
   };
 
-  const handleClick = (event: any) => {
+  const handleClick = (event: KonvaEventObject<MouseEvent>) => {
     if (mode === 'view') {
       return;
     }
@@ -172,7 +187,7 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
     selectConnection(connection.id);
   };
 
-  const handleContextMenu = (event: any) => {
+  const handleContextMenu = (event: KonvaEventObject<MouseEvent>) => {
     if (mode === 'view') {
       return;
     }
@@ -203,10 +218,10 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
         dash={baseDash}
       />
 
-      {arrowPositions.map((t) =>
+      {ARROW_POSITIONS.map((t) =>
         createArrow(t, upstream.start, upstream.end, status.fill, arrowOpacityMain)
       )}
-      {arrowPositions.map((t) =>
+      {ARROW_POSITIONS.map((t) =>
         createArrow(t, downstream.start, downstream.end, status.fill, downstreamOpacity)
       )}
 

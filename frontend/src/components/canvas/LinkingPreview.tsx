@@ -1,4 +1,4 @@
-import { Arrow, Line } from 'react-konva';
+import { Arrow } from 'react-konva';
 import { useCanvasStore } from '../../stores/canvasStore';
 
 export const LinkingPreview = () => {

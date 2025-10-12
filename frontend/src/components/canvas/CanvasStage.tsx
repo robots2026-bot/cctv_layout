@@ -1,5 +1,6 @@
-import { Stage, Layer, Rect, Image as KonvaImage, Group } from 'react-konva';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Stage, Layer, Image as KonvaImage } from 'react-konva';
+import { useEffect, useRef, useState } from 'react';
+import type { Stage as KonvaStage } from 'konva/lib/Stage';
 import useImage from 'use-image';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { ConnectionLine } from './ConnectionLine';
@@ -12,39 +13,8 @@ import { DeviceSummary } from '../../types/canvas';
 import { useRealtimeStore } from '../../stores/realtimeStore';
 import { KonvaEventObject } from 'konva/lib/Node';
 
-const GridBackground = () => {
-  const { width, height, gridSize } = useCanvasStore((state) => ({
-    width: state.viewport.width,
-    height: state.viewport.height,
-    gridSize: state.gridSize
-  }));
-
-  const { vertical, horizontal } = useMemo(() => {
-    const verticalLines: JSX.Element[] = [];
-    const horizontalLines: JSX.Element[] = [];
-    for (let x = 0; x < width; x += gridSize) {
-      verticalLines.push(
-        <Rect key={`v-${x}`} x={x} y={0} width={1} height={height} fill="rgba(148, 163, 184, 0.08)" />
-      );
-    }
-    for (let y = 0; y < height; y += gridSize) {
-      horizontalLines.push(
-        <Rect key={`h-${y}`} x={0} y={y} width={width} height={1} fill="rgba(148, 163, 184, 0.08)" />
-      );
-    }
-    return { vertical: verticalLines, horizontal: horizontalLines };
-  }, [gridSize, height, width]);
-
-  return (
-    <Group>
-      {vertical}
-      {horizontal}
-    </Group>
-  );
-};
-
 export const CanvasStage = () => {
-  const stageRef = useRef<any>(null);
+  const stageRef = useRef<KonvaStage | null>(null);
   const { viewport, setViewport, background, elements, connections } = useCanvasStore((state) => ({
     viewport: state.viewport,
     setViewport: state.setViewport,
@@ -224,9 +194,6 @@ export const CanvasStage = () => {
           setViewport({ scale: newScale });
         }}
       >
-        <Layer listening={false}>
-          <GridBackground />
-        </Layer>
         {image && (
           <Layer listening={false}>
             <KonvaImage image={image} width={image.width} height={image.height} />
