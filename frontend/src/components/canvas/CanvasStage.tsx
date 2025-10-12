@@ -193,10 +193,16 @@ export const CanvasStage = () => {
           const store = useCanvasStore.getState();
           if (!store.linking.active || !store.linking.fromElementId) return;
           const stageNode = stageRef.current;
-          const pointer = stageNode?.getPointerPosition();
-          if (pointer) {
-            store.updateLinkingPointer(pointer);
-          }
+          if (!stageNode) return;
+          const pointerPosition = stageNode.getPointerPosition();
+          if (!pointerPosition) return;
+          const scaleX = stageNode.scaleX() || 1;
+          const scaleY = stageNode.scaleY() || 1;
+          const pointer = {
+            x: (pointerPosition.x - stageNode.x()) / scaleX,
+            y: (pointerPosition.y - stageNode.y()) / scaleY
+          };
+          store.updateLinkingPointer(pointer);
         }}
         onMouseUp={(event) => {
           const store = useCanvasStore.getState();

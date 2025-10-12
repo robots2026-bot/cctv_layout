@@ -47,7 +47,7 @@ const LayoutWorkbench = () => {
           >
             <ChevronRightIcon className="h-4 w-4" />
           </button>
-          <div className="pl-4 pr-1">
+          <div className="pl-2 pr-1">
             <DevicePalette projectId={projectId ?? ''} />
           </div>
         </div>
