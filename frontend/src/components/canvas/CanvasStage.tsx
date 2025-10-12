@@ -229,13 +229,6 @@ export const CanvasStage = () => {
       </Stage>
       <CanvasLinkingControls />
       <CanvasContextMenu />
-      {blueprintMode === 'editing' && (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center pt-20">
-          <div className="rounded border border-amber-400/50 bg-slate-900/80 px-4 py-2 text-sm text-amber-100 shadow-lg shadow-slate-900/60">
-            蓝图调整中，设备与连线操作已锁定
-          </div>
-        </div>
-      )}
     </div>
   );
 };
