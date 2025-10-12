@@ -45,8 +45,7 @@ export const useRealtimeStore = create<RealtimeState>()(
 
       set({ connectionState: 'connecting' });
       socket = io(baseUrl, {
-        path: import.meta.env.VITE_REALTIME_PATH ?? '/realtime',
-        transports: ['websocket']
+        path: import.meta.env.VITE_REALTIME_PATH ?? '/realtime'
       });
 
       socket.on('connect', () => {

@@ -120,7 +120,7 @@ async function seed() {
       const layoutOne = manager.create(LayoutEntity, {
         projectId: projectOne.id,
         name: '主控制室布局',
-        backgroundImageUrl: 'https://static.demo.cctv/backgrounds/site-a.png',
+        backgroundImageUrl: 'https://dummyimage.com/1600x900/0f172a/1f4b99.png&text=Site+A',
         backgroundOpacity: 0.65
       });
       await manager.save(layoutOne);
@@ -128,7 +128,7 @@ async function seed() {
       const layoutTwo = manager.create(LayoutEntity, {
         projectId: projectTwo.id,
         name: '仓库园区布局',
-        backgroundImageUrl: 'https://static.demo.cctv/backgrounds/warehouse-b.png',
+        backgroundImageUrl: 'https://dummyimage.com/1600x900/0f172a/1f4b99.png&text=Site+B',
         backgroundOpacity: 0.6
       });
       await manager.save(layoutTwo);
