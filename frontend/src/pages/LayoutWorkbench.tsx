@@ -47,7 +47,9 @@ const LayoutWorkbench = () => {
           >
             <ChevronRightIcon className="h-4 w-4" />
           </button>
-          <DevicePalette projectId={projectId ?? ''} />
+          <div className="pl-4 pr-1">
+            <DevicePalette projectId={projectId ?? ''} />
+          </div>
         </div>
       )}
       {isDevicePanelCollapsed && (
