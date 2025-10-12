@@ -46,7 +46,7 @@ export const useUIStore = create<UIState>()(
       canvasStore.selectConnection(null);
       canvasStore.selectElement('');
       canvasStore.setHoveredElement(null);
-      canvasStore.setMode('layout');
+      canvasStore.setMode('view');
       set({ blueprintMode: 'editing' });
     },
     confirmBlueprintMode: () =>

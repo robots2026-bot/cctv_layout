@@ -18,10 +18,10 @@
 综合考虑蓝图尺寸、旋转、透明度等操作往往会频繁拖拽、缩放，如果与设备布局共享同一模式，误拖设备或连线的概率较高。因此我们选择**引入蓝图管理模式**：蓝图的导入、替换、缩放、偏移都在该模式下进行；退出模式后默认锁定蓝图层，不再响应点击/拖拽事件，避免对既有布局造成干扰。
 
 ### 交互流程
-1. 用户在布局工具栏点击“蓝图”入口，打开蓝图管理模式的抽屉（或全屏蒙层）。
+1. 用户在模式选择条点击“蓝图”按钮，打开蓝图管理抽屉。
 2. 若尚未导入蓝图，抽屉展示上传控件；用户选择图片（限制格式：PNG/JPEG/WebP；大小 < 10 MB）。
 3. 前端读取文件并上传至后端文件服务，拿到签名 URL 后写入 `canvasStore.blueprint` 状态，同时 `uiStore.blueprintMode` 维持为 `"editing"`，画布进入蓝图编辑态：
-   - `Stage` 上除蓝图以外的层全部 `listening=false`，并显示“蓝图调整中，请完成后退出”提示；
+   - `Stage` 上除蓝图以外的层全部 `listening=false`，避免误触设备与连线；
    - 若多人协作，通过 WebSocket 广播蓝图模式状态，其他成员看到不可编辑提示。
 4. 用户通过模式内的 `BlueprintControls` 调节缩放（0.1~5.0）、透明度（0~1）、位置偏移（X/Y）。这些控制仅更新蓝图参数，不改变 `viewport.scale`。
 5. 用户点击“应用并退出”，`uiStore.blueprintMode` 置为 `"locked"`：蓝图层 `listening=false`、`draggable=false`，设备布局恢复交互。
@@ -67,7 +67,7 @@
 3. `CanvasStage`
    - 将蓝图层渲染在设备/连线之前，但在背景色之后。
    - `Stage` 的 `scaleX/scaleY` 仍由 `viewport` 控制，用户缩放视口时，蓝图整体随同放大/缩小；单独调节蓝图时，通过 `blueprint.scale` 控制图片自身尺寸，从而实现叠加效果。
-   - 当 `uiStore.blueprintMode === 'editing'` 时，通过 Stage 守卫阻止设备节点、连线的 `dragstart/dragmove/dragend` 事件，并在画布中央显示半透明遮罩提示。
+   - 当 `uiStore.blueprintMode === 'editing'` 时，通过 Stage 守卫阻止设备节点、连线的 `dragstart/dragmove/dragend` 事件，避免误操作。
 
 ## 后端影响
 - `LayoutsModule` 的 DTO 与实体需新增 `blueprint` 字段（可选），沿用 JSONB 存储。
@@ -88,8 +88,9 @@
 
 
 ## 实现记录（2025-05）
-1. 前端新增 `BlueprintManager`/`BlueprintDrawer`/`BlueprintLayer` 组件：
-   - `BlueprintManager` 挂载在布局工作台右上角，负责进入蓝图模式并展示当前锁定状态。
+1. 模式选择条加入“蓝图”入口与缩放指示，`BlueprintManager`/`BlueprintDrawer`/`BlueprintLayer` 共同协作：
+   - `CanvasLinkingControls` 在模式按钮后方展示缩放倍率标签（图标 + 数值），保持布局与蓝图模式下统一可见。
+   - `BlueprintManager` 挂载在布局工作台右上角，仅在蓝图处于“编辑”或“锁定”态时展示状态标签，同时负责挂载蓝图抽屉。
    - `BlueprintDrawer` 作为模式抽屉承载上传、缩放、透明度与偏移调节，上传逻辑使用 `URL.createObjectURL` 读取本地图片尺寸。
    - `BlueprintLayer` 插入到 Konva 渲染树中，`editing` 模式下允许拖拽图片并实时写回偏移。
 2. `canvasStore` 扩展 `blueprint` 切片与 `setBlueprint`/`updateBlueprint` 行为，`uiStore` 新增 `blueprintMode` 及对应模式切换动作，进入模式时会清理选中状态与连线流程。

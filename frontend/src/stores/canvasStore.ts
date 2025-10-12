@@ -73,7 +73,7 @@ export const useCanvasStore = create<CanvasState>()(
     selectedElement: null,
     selectedConnectionId: null,
     hoveredElementId: null,
-    mode: 'layout',
+    mode: 'view',
     contextMenu: null,
     linking: { active: false, fromElementId: null, pointer: null },
     background: null,
@@ -127,7 +127,7 @@ export const useCanvasStore = create<CanvasState>()(
         hoveredElementId: null,
         contextMenu: null,
         linking: { active: false, fromElementId: null, pointer: null },
-        mode: 'layout'
+        mode: 'view'
       }),
     addDeviceToCanvas: (device, position) =>
       set((state) => {
@@ -488,7 +488,8 @@ export const useCanvasStore = create<CanvasState>()(
         linking: { active: false, fromElementId: null, pointer: null },
         background: null,
         blueprint: null,
-        viewport: defaultViewport
+        viewport: defaultViewport,
+        mode: 'view'
       })
   }))
 );
