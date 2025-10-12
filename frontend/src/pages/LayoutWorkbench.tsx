@@ -6,6 +6,7 @@ import { useLayoutStore } from '../stores/layoutStore';
 import FloatingPropertyPanel from '../components/panels/FloatingPropertyPanel';
 import { useCanvasStore } from '../stores/canvasStore';
 import { useUIStore } from '../stores/uiStore';
+import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/solid';
 
 const LayoutWorkbench = () => {
   const { projectId, layoutId } = useParams();
@@ -42,9 +43,9 @@ const LayoutWorkbench = () => {
             type="button"
             onClick={toggleDevicePanel}
             aria-label="收起设备侧栏"
-            className="absolute left-0 top-4 z-20 -translate-x-1/2 rounded border border-slate-800/80 bg-slate-900/80 px-2 py-1 text-xs text-slate-400 shadow transition hover:border-brand-400/80 hover:text-white"
+            className="absolute left-0 top-4 z-20 -translate-x-1/2 rounded border border-slate-800/80 bg-slate-900/80 p-1 text-slate-400 shadow transition hover:border-brand-400/80 hover:text-white"
           >
-            收起
+            <ChevronRightIcon className="h-4 w-4" />
           </button>
           <DevicePalette projectId={projectId ?? ''} />
         </div>
@@ -54,9 +55,9 @@ const LayoutWorkbench = () => {
           type="button"
           onClick={toggleDevicePanel}
           aria-label="展开设备侧栏"
-          className="absolute right-4 top-6 z-30 rounded border border-slate-800/80 bg-slate-900/80 px-3 py-2 text-xs text-slate-300 shadow transition hover:border-brand-400/80 hover:text-white"
+          className="absolute right-4 top-6 z-30 rounded border border-slate-800/80 bg-slate-900/80 p-2 text-slate-300 shadow transition hover:border-brand-400/80 hover:text-white"
         >
-          展开设备
+          <ChevronLeftIcon className="h-4 w-4" />
         </button>
       )}
     </div>
