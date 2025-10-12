@@ -1,4 +1,5 @@
 import { useCanvasStore } from '../../stores/canvasStore';
+import { useUIStore } from '../../stores/uiStore';
 
 export const CanvasLinkingControls = () => {
   const {
@@ -16,8 +17,13 @@ export const CanvasLinkingControls = () => {
     selectedConnectionId: state.selectedConnectionId,
     removeConnection: state.removeConnection
   }));
+  const blueprintMode = useUIStore((state) => state.blueprintMode);
+  const isBlueprintEditing = blueprintMode === 'editing';
 
   const handleModeChange = (nextMode: 'view' | 'layout' | 'linking') => {
+    if (isBlueprintEditing) {
+      return;
+    }
     if (nextMode === 'linking') {
       cancelLinking();
       setMode('linking');
@@ -29,7 +35,9 @@ export const CanvasLinkingControls = () => {
     }
   };
 
-  const hint = mode === 'linking'
+  const hint = isBlueprintEditing
+    ? '蓝图编辑中，连线控制已暂停'
+    : mode === 'linking'
     ? linking.fromElementId
       ? '拖动到目标设备松开即可连线；点击空白取消'
       : '按下并拖动起点设备开始连线'
@@ -48,34 +56,37 @@ export const CanvasLinkingControls = () => {
           <span>模式：</span>
           <button
             type="button"
+            disabled={isBlueprintEditing}
             onClick={() => handleModeChange('view')}
             className={`rounded px-3 py-1 font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 ${
               mode === 'view' ? 'bg-slate-500/90 text-white' : 'bg-slate-800/70 text-slate-200 hover:bg-slate-700/80'
-            }`}
+            } ${isBlueprintEditing ? 'cursor-not-allowed opacity-60' : ''}`}
           >
             观看
           </button>
           <button
             type="button"
+            disabled={isBlueprintEditing}
             onClick={() => handleModeChange('layout')}
             className={`rounded px-3 py-1 font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 ${
               mode === 'layout' ? 'bg-sky-500/90 text-white' : 'bg-slate-800/70 text-slate-200 hover:bg-slate-700/80'
-            }`}
+            } ${isBlueprintEditing ? 'cursor-not-allowed opacity-60' : ''}`}
           >
             布局
           </button>
           <button
             type="button"
+            disabled={isBlueprintEditing}
             onClick={() => handleModeChange('linking')}
             className={`rounded px-3 py-1 font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 ${
               mode === 'linking' ? 'bg-rose-500/90 text-white' : 'bg-slate-800/70 text-slate-200 hover:bg-slate-700/80'
-            }`}
+            } ${isBlueprintEditing ? 'cursor-not-allowed opacity-60' : ''}`}
           >
             连线
           </button>
         </div>
         <span className="text-xs text-slate-200/90">{hint}</span>
-        {mode === 'linking' && selectedConnectionId && (
+        {!isBlueprintEditing && mode === 'linking' && selectedConnectionId && (
           <button
             type="button"
             onClick={handleDeleteConnection}

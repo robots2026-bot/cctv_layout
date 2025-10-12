@@ -1,6 +1,7 @@
 import { Circle, Group, Rect, Text } from 'react-konva';
 import { CanvasElement } from '../../types/canvas';
 import { useCanvasStore } from '../../stores/canvasStore';
+import { useUIStore } from '../../stores/uiStore';
 import { getDeviceCategory, getStatusVisual } from '../../utils/deviceVisual';
 
 interface DeviceNodeProps {
@@ -29,6 +30,8 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
     completeLinking: state.completeLinking,
     mode: state.mode
   }));
+  const blueprintMode = useUIStore((state) => state.blueprintMode);
+  const isBlueprintEditing = blueprintMode === 'editing';
   const isHovered = hoveredElementId === element.id;
 
   const textOffsetX = 56;
@@ -65,16 +68,29 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
     <Group
       x={element.position.x}
       y={element.position.y}
-      draggable={mode === 'layout' && !linking.active}
-      onDragMove={(event) =>
+      draggable={mode === 'layout' && !linking.active && !isBlueprintEditing}
+      listening={!isBlueprintEditing}
+      onDragMove={(event) => {
+        if (isBlueprintEditing) {
+          return;
+        }
         useCanvasStore.getState().updateElementPosition(element.id, {
           x: event.target.x(),
           y: event.target.y()
-        })
-      }
-      onMouseEnter={() => setHoveredElement(element.id)}
-      onMouseLeave={() => setHoveredElement(null)}
+        });
+      }}
+      onMouseEnter={() => {
+        if (isBlueprintEditing) return;
+        setHoveredElement(element.id);
+      }}
+      onMouseLeave={() => {
+        if (isBlueprintEditing) return;
+        setHoveredElement(null);
+      }}
       onMouseDown={(event) => {
+        if (isBlueprintEditing) {
+          return;
+        }
         if (mode !== 'linking') {
           return;
         }
@@ -100,6 +116,9 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
         }
       }}
       onMouseUp={(event) => {
+        if (isBlueprintEditing) {
+          return;
+        }
         const store = useCanvasStore.getState();
         if (!store.linking.active || !store.linking.fromElementId) {
           return;
@@ -112,6 +131,10 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
         completeLinking(element.id);
       }}
       onDragStart={(event) => {
+        if (isBlueprintEditing) {
+          event.cancelBubble = true;
+          return;
+        }
         if (mode !== 'layout') {
           event.cancelBubble = true;
           return;
@@ -121,6 +144,9 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
         event.target.getLayer()?.batchDraw();
       }}
       onContextMenu={(event) => {
+        if (isBlueprintEditing) {
+          return;
+        }
         event.evt.preventDefault();
         if (linking.active || mode === 'view') {
           return;

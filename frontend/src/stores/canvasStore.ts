@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { CanvasConnection, CanvasElement, CanvasLayout, CanvasViewport, DeviceSummary } from '../types/canvas';
+import { CanvasBlueprint, CanvasConnection, CanvasElement, CanvasLayout, CanvasViewport, DeviceSummary } from '../types/canvas';
 import { nanoid } from '../utils/nanoid';
 import { useRealtimeStore } from './realtimeStore';
 
@@ -31,10 +31,13 @@ interface CanvasState {
   linking: LinkingState;
   mode: CanvasMode;
   background: CanvasBackground | null;
+  blueprint: CanvasBlueprint | null;
   viewport: CanvasViewport;
   gridSize: number;
   setViewport: (viewport: Partial<CanvasViewport>) => void;
   setBackground: (background: CanvasBackground | null) => void;
+  setBlueprint: (blueprint: CanvasBlueprint | null) => void;
+  updateBlueprint: (patch: Partial<CanvasBlueprint>) => void;
   setCanvasData: (layout: CanvasLayout) => void;
   addDeviceToCanvas: (device: DeviceSummary, position?: CanvasElement['position']) => void;
   selectElement: (elementId: string) => void;
@@ -74,6 +77,7 @@ export const useCanvasStore = create<CanvasState>()(
     contextMenu: null,
     linking: { active: false, fromElementId: null, pointer: null },
     background: null,
+    blueprint: null,
     gridSize: 48,
     viewport: defaultViewport,
     setViewport: (viewport) =>
@@ -92,11 +96,32 @@ export const useCanvasStore = create<CanvasState>()(
         }
       })),
     setBackground: (background) => set({ background }),
+    setBlueprint: (blueprint) => set({ blueprint }),
+    updateBlueprint: (patch) =>
+      set((state) => {
+        if (!state.blueprint) {
+          return { blueprint: state.blueprint };
+        }
+        const nextOffset =
+          patch.offset !== undefined
+            ? {
+                x: patch.offset.x ?? state.blueprint.offset.x,
+                y: patch.offset.y ?? state.blueprint.offset.y
+              }
+            : state.blueprint.offset;
+        const nextBlueprint: CanvasBlueprint = {
+          ...state.blueprint,
+          ...patch,
+          offset: nextOffset
+        };
+        return { blueprint: nextBlueprint };
+      }),
     setCanvasData: (layout) =>
       set({
         elements: layout.elements.map((element) => ({ ...element, selected: false })),
         connections: layout.connections,
         background: layout.background ? { url: layout.background.url } : null,
+        blueprint: layout.blueprint ?? null,
         selectedElement: null,
         selectedConnectionId: null,
         hoveredElementId: null,
@@ -462,6 +487,7 @@ export const useCanvasStore = create<CanvasState>()(
         contextMenu: null,
         linking: { active: false, fromElementId: null, pointer: null },
         background: null,
+        blueprint: null,
         viewport: defaultViewport
       })
   }))

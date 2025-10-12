@@ -2,6 +2,7 @@ import { useParams } from 'react-router-dom';
 import { useEffect } from 'react';
 import { CanvasStage } from '../components/canvas/CanvasStage';
 import { DevicePalette } from '../components/sidebar/DevicePalette';
+import { BlueprintManager } from '../components/blueprint/BlueprintManager';
 import { useLayoutStore } from '../stores/layoutStore';
 import FloatingPropertyPanel from '../components/panels/FloatingPropertyPanel';
 import { useCanvasStore } from '../stores/canvasStore';
@@ -36,6 +37,7 @@ const LayoutWorkbench = () => {
           <CanvasStage />
         )}
         <FloatingPropertyPanel />
+        <BlueprintManager />
       </div>
       {!isDevicePanelCollapsed && (
         <div className="relative flex w-72 flex-col border-l border-slate-800 bg-slate-900/40">

@@ -44,6 +44,15 @@ export interface CanvasViewport {
   position: { x: number; y: number };
 }
 
+export interface CanvasBlueprint {
+  url: string;
+  naturalWidth: number;
+  naturalHeight: number;
+  scale: number;
+  opacity: number;
+  offset: { x: number; y: number };
+}
+
 export interface CanvasLayout {
   id: string;
   name: string;
@@ -51,6 +60,7 @@ export interface CanvasLayout {
   background?: {
     url: string | null;
   } | null;
+  blueprint?: CanvasBlueprint | null;
   elements: CanvasElement[];
   connections: CanvasConnection[];
 }

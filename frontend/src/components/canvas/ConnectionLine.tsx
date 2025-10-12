@@ -1,6 +1,7 @@
 import { Arrow, Group, Label, Line, Tag, Text } from 'react-konva';
 import { CanvasConnection } from '../../types/canvas';
 import { useCanvasStore } from '../../stores/canvasStore';
+import { useUIStore } from '../../stores/uiStore';
 import { getStatusVisual } from '../../utils/deviceVisual';
 import type { KonvaEventObject } from 'konva/lib/Node';
 
@@ -76,6 +77,8 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
     selectConnection: state.selectConnection,
     mode: state.mode
   }));
+  const blueprintMode = useUIStore((state) => state.blueprintMode);
+  const isBlueprintEditing = blueprintMode === 'editing';
 
   const resolvePoint = (deviceKey?: string, fallback?: { x: number; y: number }) => {
     if (!deviceKey) {
@@ -180,7 +183,7 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
   };
 
   const handleClick = (event: KonvaEventObject<MouseEvent>) => {
-    if (mode === 'view') {
+    if (mode === 'view' || isBlueprintEditing) {
       return;
     }
     event.cancelBubble = true;
@@ -188,7 +191,7 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
   };
 
   const handleContextMenu = (event: KonvaEventObject<MouseEvent>) => {
-    if (mode === 'view') {
+    if (mode === 'view' || isBlueprintEditing) {
       return;
     }
     event.evt.preventDefault();
@@ -203,7 +206,7 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
   const downstreamOpacity = connection.selected ? 0.75 : 0.65;
 
   return (
-    <Group listening onClick={handleClick} onContextMenu={handleContextMenu}>
+    <Group listening={!isBlueprintEditing} onClick={handleClick} onContextMenu={handleContextMenu}>
       <Line
         points={makePoints(upstream.start, upstream.end)}
         stroke={status.fill}

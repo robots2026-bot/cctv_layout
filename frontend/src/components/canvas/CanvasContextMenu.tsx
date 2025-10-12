@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useCanvasStore } from '../../stores/canvasStore';
+import { useUIStore } from '../../stores/uiStore';
 
 export const CanvasContextMenu = () => {
   const { contextMenu, removeElement, removeConnection, closeContextMenu, connections, elements } = useCanvasStore((state) => ({
@@ -11,6 +12,7 @@ export const CanvasContextMenu = () => {
     connections: state.connections,
     elements: state.elements
   }));
+  const blueprintMode = useUIStore((state) => state.blueprintMode);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -33,7 +35,7 @@ export const CanvasContextMenu = () => {
     };
   }, [contextMenu, closeContextMenu]);
 
-  if (!contextMenu || !contextMenu.elementId) {
+  if (blueprintMode === 'editing' || !contextMenu || !contextMenu.elementId) {
     return null;
   }
 

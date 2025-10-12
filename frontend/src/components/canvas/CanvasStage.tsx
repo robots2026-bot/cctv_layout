@@ -3,8 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import type { Stage as KonvaStage } from 'konva/lib/Stage';
 import useImage from 'use-image';
 import { useCanvasStore } from '../../stores/canvasStore';
+import { useUIStore } from '../../stores/uiStore';
 import { ConnectionLine } from './ConnectionLine';
 import { DeviceNode } from './DeviceNode';
+import { BlueprintLayer } from './BlueprintLayer';
 import { CanvasContextMenu } from './CanvasContextMenu';
 import { LinkingPreview } from './LinkingPreview';
 import { CanvasLinkingControls } from './CanvasLinkingControls';
@@ -22,6 +24,7 @@ export const CanvasStage = () => {
     elements: state.elements,
     connections: state.connections
   }));
+  const blueprintMode = useUIStore((state) => state.blueprintMode);
   const [image] = useImage(background?.url ?? '', 'anonymous');
   const [dimensions, setDimensions] = useState({ width: viewport.width, height: viewport.height });
 
@@ -124,6 +127,9 @@ export const CanvasStage = () => {
         draggable
         className="cursor-grab"
         onMouseDown={(event) => {
+          if (blueprintMode === 'editing') {
+            return;
+          }
           const store = useCanvasStore.getState();
           const stageNode = stageRef.current;
           const isStageTarget = stageNode ? event.target === stageNode : false;
@@ -160,6 +166,9 @@ export const CanvasStage = () => {
           stageNode.container().style.cursor = 'grab';
         }}
         onMouseMove={() => {
+          if (blueprintMode === 'editing') {
+            return;
+          }
           const store = useCanvasStore.getState();
           if (!store.linking.active || !store.linking.fromElementId) return;
           const stageNode = stageRef.current;
@@ -175,6 +184,9 @@ export const CanvasStage = () => {
           store.updateLinkingPointer(pointer);
         }}
         onMouseUp={(event) => {
+          if (blueprintMode === 'editing') {
+            return;
+          }
           const store = useCanvasStore.getState();
           if (event.evt.button === 0 && store.linking.active && store.linking.fromElementId) {
             store.cancelLinking();
@@ -199,7 +211,8 @@ export const CanvasStage = () => {
             <KonvaImage image={image} width={image.width} height={image.height} />
           </Layer>
         )}
-        <Layer>
+        <BlueprintLayer />
+        <Layer listening={blueprintMode !== 'editing'}>
           {connections.map((connection) => (
             <ConnectionLine key={connection.id} connection={connection} />
           ))}
@@ -207,7 +220,7 @@ export const CanvasStage = () => {
         <Layer listening={false}>
           <LinkingPreview />
         </Layer>
-        <Layer>
+        <Layer listening={blueprintMode !== 'editing'}>
           {elements.map((element) => (
             <DeviceNode key={element.id} element={element} />
           ))}
@@ -215,6 +228,13 @@ export const CanvasStage = () => {
       </Stage>
       <CanvasLinkingControls />
       <CanvasContextMenu />
+      {blueprintMode === 'editing' && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center pt-20">
+          <div className="rounded border border-amber-400/50 bg-slate-900/80 px-4 py-2 text-sm text-amber-100 shadow-lg shadow-slate-900/60">
+            蓝图调整中，设备与连线操作已锁定
+          </div>
+        </div>
+      )}
     </div>
   );
 };
