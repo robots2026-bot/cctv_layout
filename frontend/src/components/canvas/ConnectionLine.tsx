@@ -77,8 +77,7 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
     selectConnection: state.selectConnection,
     mode: state.mode
   }));
-  const blueprintMode = useUIStore((state) => state.blueprintMode);
-  const isBlueprintEditing = blueprintMode === 'editing';
+  const isBlueprintEditing = mode === 'blueprint';
 
   const resolvePoint = (deviceKey?: string, fallback?: { x: number; y: number }) => {
     if (!deviceKey) {

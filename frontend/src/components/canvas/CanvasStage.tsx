@@ -17,12 +17,13 @@ import { KonvaEventObject } from 'konva/lib/Node';
 
 export const CanvasStage = () => {
   const stageRef = useRef<KonvaStage | null>(null);
-  const { viewport, setViewport, background, elements, connections } = useCanvasStore((state) => ({
+  const { viewport, setViewport, background, elements, connections, mode } = useCanvasStore((state) => ({
     viewport: state.viewport,
     setViewport: state.setViewport,
     background: state.background,
     elements: state.elements,
-    connections: state.connections
+    connections: state.connections,
+    mode: state.mode
   }));
   const blueprintMode = useUIStore((state) => state.blueprintMode);
   const [image] = useImage(background?.url ?? '', 'anonymous');
@@ -127,7 +128,7 @@ export const CanvasStage = () => {
         draggable
         className="cursor-grab"
         onMouseDown={(event) => {
-          if (blueprintMode === 'editing') {
+          if (mode === 'blueprint') {
             return;
           }
           const store = useCanvasStore.getState();
@@ -166,7 +167,7 @@ export const CanvasStage = () => {
           stageNode.container().style.cursor = 'grab';
         }}
         onMouseMove={() => {
-          if (blueprintMode === 'editing') {
+          if (mode === 'blueprint') {
             return;
           }
           const store = useCanvasStore.getState();
@@ -184,7 +185,7 @@ export const CanvasStage = () => {
           store.updateLinkingPointer(pointer);
         }}
         onMouseUp={(event) => {
-          if (blueprintMode === 'editing') {
+          if (mode === 'blueprint') {
             return;
           }
           const store = useCanvasStore.getState();
@@ -212,7 +213,7 @@ export const CanvasStage = () => {
           </Layer>
         )}
         <BlueprintLayer />
-        <Layer listening={blueprintMode !== 'editing'}>
+        <Layer listening={mode !== 'blueprint'}>
           {connections.map((connection) => (
             <ConnectionLine key={connection.id} connection={connection} />
           ))}
@@ -220,7 +221,7 @@ export const CanvasStage = () => {
         <Layer listening={false}>
           <LinkingPreview />
         </Layer>
-        <Layer listening={blueprintMode !== 'editing'}>
+        <Layer listening={mode !== 'blueprint'}>
           {elements.map((element) => (
             <DeviceNode key={element.id} element={element} />
           ))}

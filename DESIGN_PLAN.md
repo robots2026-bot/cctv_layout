@@ -6,7 +6,7 @@
 ## 2. 系统架构
 - **前端**：
   - 技术选型：React + TypeScript + Zustand 进行状态管理，配合 Tailwind CSS 提升样式开发效率。
-  - 布局编辑：采用 Konva.js 支持 Canvas 拖拽、缩放、连接线绘制，使用 react-konva 封装组件；新增蓝图图层用于导入工地平面图并可独立缩放，且提供蓝图管理模式避免与设备操作互相干扰。
+  - 布局编辑：采用 Konva.js 支持 Canvas 拖拽、缩放、连接线绘制，使用 react-konva 封装组件；新增蓝图图层用于导入工地平面图并可独立缩放，画布模式扩展 `blueprint` 以隔离图纸调整与设备操作。
   - 通信：通过 WebSocket 接收实时设备扫描推送，REST API 执行常规数据管理操作。
 - **后端**：
   - 技术选型：Node.js（NestJS 框架）作为唯一后端框架选择，统一采用 TypeScript 编写服务。
@@ -35,7 +35,7 @@
   4. `uiStore`：模态窗口、通知、全局加载态。
 - **组件划分**：
   - 原子组件：按钮、表单、弹窗等，通过 Tailwind 原子类与 Radix UI 组合实现。
-  - 画布组件：`CanvasStage`、`DeviceNode`、`ConnectionLine`、`GridBackground`，严格区分展示型与容器型组件；蓝图相关能力拆分为 `BlueprintLayer` 与 `BlueprintControls`，通过 `uiStore.blueprintMode` 管理“编辑/锁定”模式，保持背景缩放/位置逻辑独立并防止误操作。
+  - 画布组件：`CanvasStage`、`DeviceNode`、`ConnectionLine`、`GridBackground`，严格区分展示型与容器型组件；蓝图相关能力拆分为 `BlueprintLayer` 与 `BlueprintControls`，由 `canvasStore.mode` 中的 `blueprint` 态控制交互，保持背景缩放/位置逻辑独立并防止误操作。
   - 侧栏组件：`DevicePalette`（可拖拽列表，使用图形化图标与绿色/深灰背景区分设备在线状态）、`PropertyPanel`、`VersionHistory`。
 - **性能策略**：
   - 使用 `react-konva` 的 `FastLayer` 渲染大量静态图元。

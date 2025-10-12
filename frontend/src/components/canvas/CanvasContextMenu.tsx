@@ -4,13 +4,14 @@ import { useCanvasStore } from '../../stores/canvasStore';
 import { useUIStore } from '../../stores/uiStore';
 
 export const CanvasContextMenu = () => {
-  const { contextMenu, removeElement, removeConnection, closeContextMenu, connections, elements } = useCanvasStore((state) => ({
+  const { contextMenu, removeElement, removeConnection, closeContextMenu, connections, elements, mode } = useCanvasStore((state) => ({
     contextMenu: state.contextMenu,
     removeElement: state.removeElement,
     removeConnection: state.removeConnection,
     closeContextMenu: state.closeContextMenu,
     connections: state.connections,
-    elements: state.elements
+    elements: state.elements,
+    mode: state.mode
   }));
   const blueprintMode = useUIStore((state) => state.blueprintMode);
 
@@ -35,7 +36,7 @@ export const CanvasContextMenu = () => {
     };
   }, [contextMenu, closeContextMenu]);
 
-  if (blueprintMode === 'editing' || !contextMenu || !contextMenu.elementId) {
+  if (mode === 'blueprint' || !contextMenu || !contextMenu.elementId) {
     return null;
   }
 

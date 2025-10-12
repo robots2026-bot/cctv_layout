@@ -19,7 +19,7 @@ interface LinkingState {
   pointer: { x: number; y: number } | null;
 }
 
-export type CanvasMode = 'view' | 'layout' | 'linking';
+export type CanvasMode = 'view' | 'layout' | 'linking' | 'blueprint';
 
 interface CanvasState {
   elements: CanvasElement[];
@@ -283,12 +283,14 @@ export const useCanvasStore = create<CanvasState>()(
         const linkingState = mode === 'linking'
           ? { active: true, fromElementId: null, pointer: null }
           : { active: false, fromElementId: null, pointer: null };
+        const shouldClearSelection = mode === 'view' || mode === 'blueprint';
         return {
           mode,
           linking: linkingState,
           contextMenu: null,
-          selectedElement: mode === 'view' ? null : state.selectedElement,
-          selectedConnectionId: mode === 'view' ? null : state.selectedConnectionId
+          hoveredElementId: shouldClearSelection ? null : state.hoveredElementId,
+          selectedElement: shouldClearSelection ? null : state.selectedElement,
+          selectedConnectionId: shouldClearSelection ? null : state.selectedConnectionId
         };
       }),
     setLinkingActive: (active) =>

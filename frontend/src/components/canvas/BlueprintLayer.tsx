@@ -2,14 +2,13 @@ import { Layer, Text, Image as KonvaImage } from 'react-konva';
 import useImage from 'use-image';
 import { useEffect } from 'react';
 import { useCanvasStore } from '../../stores/canvasStore';
-import { useUIStore } from '../../stores/uiStore';
 
 export const BlueprintLayer = () => {
-  const { blueprint, updateBlueprint } = useCanvasStore((state) => ({
+  const { blueprint, updateBlueprint, mode } = useCanvasStore((state) => ({
     blueprint: state.blueprint,
-    updateBlueprint: state.updateBlueprint
+    updateBlueprint: state.updateBlueprint,
+    mode: state.mode
   }));
-  const blueprintMode = useUIStore((state) => state.blueprintMode);
   const [image, status] = useImage(blueprint?.url ?? '', 'anonymous');
 
   useEffect(() => {
@@ -26,7 +25,7 @@ export const BlueprintLayer = () => {
     return null;
   }
 
-  const isEditing = blueprintMode === 'editing';
+  const isEditing = mode === 'blueprint';
   const width = image?.width ?? blueprint.naturalWidth;
   const height = image?.height ?? blueprint.naturalHeight;
 

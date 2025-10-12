@@ -1,39 +1,28 @@
 import { MagnifyingGlassPlusIcon } from '@heroicons/react/24/solid';
 import { useCanvasStore } from '../../stores/canvasStore';
-import { useUIStore } from '../../stores/uiStore';
+import type { CanvasMode } from '../../stores/canvasStore';
 
 export const CanvasLinkingControls = () => {
-  const { mode, setMode, cancelLinking, selectedConnectionId, removeConnection, blueprint, viewportScale } = useCanvasStore(
+  const { mode, setMode, cancelLinking, selectedConnectionId, removeConnection, viewportScale } = useCanvasStore(
     (state) => ({
       mode: state.mode,
       setMode: state.setMode,
       cancelLinking: state.cancelLinking,
       selectedConnectionId: state.selectedConnectionId,
       removeConnection: state.removeConnection,
-      blueprint: state.blueprint,
       viewportScale: state.viewport.scale
     })
   );
-  const { blueprintMode, enterBlueprintMode } = useUIStore((state) => ({
-    blueprintMode: state.blueprintMode,
-    enterBlueprintMode: state.enterBlueprintMode
-  }));
-  const isBlueprintEditing = blueprintMode === 'editing';
   const formattedScale = viewportScale.toFixed(viewportScale >= 1 ? 1 : 2);
 
-  const handleModeChange = (nextMode: 'view' | 'layout' | 'linking') => {
-    if (isBlueprintEditing) {
-      return;
+  const handleModeChange = (nextMode: CanvasMode) => {
+    if (mode === 'linking' && nextMode !== 'linking') {
+      cancelLinking();
     }
     if (nextMode === 'linking') {
       cancelLinking();
-      setMode('linking');
-    } else {
-      if (mode === 'linking') {
-        cancelLinking();
-      }
-      setMode(nextMode);
     }
+    setMode(nextMode);
   };
 
   const handleDeleteConnection = () => {
@@ -42,11 +31,10 @@ export const CanvasLinkingControls = () => {
     }
   };
 
-  const blueprintButtonClasses = isBlueprintEditing
-    ? 'bg-amber-500/90 text-slate-900'
-    : blueprint
-    ? 'bg-slate-800/70 text-slate-100 hover:bg-slate-700/80'
-    : 'bg-slate-800/70 text-slate-200 hover:bg-slate-700/80';
+  const resolveButtonClasses = (targetMode: CanvasMode, activeClasses: string) =>
+    `rounded px-3 py-1 font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 ${
+      mode === targetMode ? activeClasses : 'bg-slate-800/70 text-slate-200 hover:bg-slate-700/80'
+    }`;
 
   return (
     <div className="pointer-events-none absolute left-6 top-6 z-30 flex flex-col gap-2">
@@ -55,50 +43,34 @@ export const CanvasLinkingControls = () => {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={isBlueprintEditing}
               onClick={() => handleModeChange('view')}
-              className={`rounded px-3 py-1 font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 ${
-                mode === 'view' ? 'bg-slate-500/90 text-white' : 'bg-slate-800/70 text-slate-200 hover:bg-slate-700/80'
-              } ${isBlueprintEditing ? 'cursor-not-allowed opacity-60' : ''}`}
+              className={resolveButtonClasses('view', 'bg-slate-500/90 text-white')}
             >
               观看
             </button>
             <button
               type="button"
-              disabled={isBlueprintEditing}
               onClick={() => handleModeChange('layout')}
-              className={`rounded px-3 py-1 font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 ${
-                mode === 'layout' ? 'bg-sky-500/90 text-white' : 'bg-slate-800/70 text-slate-200 hover:bg-slate-700/80'
-              } ${isBlueprintEditing ? 'cursor-not-allowed opacity-60' : ''}`}
+              className={resolveButtonClasses('layout', 'bg-sky-500/90 text-white')}
             >
               布局
             </button>
             <button
               type="button"
-              disabled={isBlueprintEditing}
               onClick={() => handleModeChange('linking')}
-              className={`rounded px-3 py-1 font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 ${
-                mode === 'linking' ? 'bg-rose-500/90 text-white' : 'bg-slate-800/70 text-slate-200 hover:bg-slate-700/80'
-              } ${isBlueprintEditing ? 'cursor-not-allowed opacity-60' : ''}`}
+              className={resolveButtonClasses('linking', 'bg-rose-500/90 text-white')}
             >
               连线
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (!isBlueprintEditing) {
-                  enterBlueprintMode();
-                }
-              }}
-              disabled={isBlueprintEditing}
-              className={`rounded px-3 py-1 font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 ${blueprintButtonClasses} ${
-                isBlueprintEditing ? 'cursor-not-allowed' : ''
-              }`}
+              onClick={() => handleModeChange('blueprint')}
+              className={resolveButtonClasses('blueprint', 'bg-indigo-500/90 text-white')}
             >
               蓝图
             </button>
           </div>
-          {!isBlueprintEditing && mode === 'linking' && selectedConnectionId && (
+          {mode === 'linking' && selectedConnectionId && (
             <button
               type="button"
               onClick={handleDeleteConnection}

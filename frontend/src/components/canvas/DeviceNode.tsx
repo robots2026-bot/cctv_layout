@@ -30,8 +30,7 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
     completeLinking: state.completeLinking,
     mode: state.mode
   }));
-  const blueprintMode = useUIStore((state) => state.blueprintMode);
-  const isBlueprintEditing = blueprintMode === 'editing';
+  const isBlueprintEditing = mode === 'blueprint';
   const isHovered = hoveredElementId === element.id;
 
   const textOffsetX = 56;

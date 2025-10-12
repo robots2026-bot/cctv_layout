@@ -13,19 +13,18 @@ const loadImageDimensions = (url: string) =>
 
 export const BlueprintDrawer = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const { blueprint, setBlueprint, updateBlueprint } = useCanvasStore((state) => ({
+  const { blueprint, setBlueprint, updateBlueprint, mode, setMode } = useCanvasStore((state) => ({
     blueprint: state.blueprint,
     setBlueprint: state.setBlueprint,
-    updateBlueprint: state.updateBlueprint
+    updateBlueprint: state.updateBlueprint,
+    mode: state.mode,
+    setMode: state.setMode
   }));
-  const { blueprintMode, confirmBlueprintMode, exitBlueprintMode, addNotification } = useUIStore((state) => ({
-    blueprintMode: state.blueprintMode,
-    confirmBlueprintMode: state.confirmBlueprintMode,
-    exitBlueprintMode: state.exitBlueprintMode,
+  const { addNotification } = useUIStore((state) => ({
     addNotification: state.addNotification
   }));
 
-  if (blueprintMode !== 'editing') {
+  if (mode !== 'blueprint') {
     return null;
   }
 
@@ -120,7 +119,6 @@ export const BlueprintDrawer = () => {
       URL.revokeObjectURL(blueprint.url);
     }
     setBlueprint(null);
-    confirmBlueprintMode();
     notify('蓝图已移除', '已清除画布蓝图图层', 'warning');
   };
 
@@ -131,15 +129,15 @@ export const BlueprintDrawer = () => {
       <div className="pointer-events-auto flex h-full w-96 flex-col border-l border-slate-800/80 bg-slate-900/95 px-6 py-6 text-slate-200 shadow-xl shadow-slate-900/60">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-100">蓝图管理模式</h2>
-            <p className="mt-1 text-xs text-slate-400">蓝图调整完成后点击“完成并锁定”返回设备布局。</p>
+            <h2 className="text-lg font-semibold text-slate-100">蓝图设置</h2>
+            <p className="mt-1 text-xs text-slate-400">导入图纸并调整缩放、透明度与位置。</p>
           </div>
           <button
             type="button"
             className="rounded border border-slate-700/80 px-3 py-1 text-xs text-slate-300 transition hover:border-slate-500/80 hover:text-white"
-            onClick={() => confirmBlueprintMode()}
+            onClick={() => setMode('view')}
           >
-            完成
+            关闭
           </button>
         </div>
 
@@ -246,30 +244,6 @@ export const BlueprintDrawer = () => {
               </div>
             </div>
           </section>
-        </div>
-
-        <div className="mt-auto flex items-center justify-between border-t border-slate-800/70 pt-4 text-xs">
-          <button
-            type="button"
-            onClick={() => {
-              if (hasBlueprint) {
-                confirmBlueprintMode();
-              } else {
-                exitBlueprintMode();
-              }
-            }}
-            className="rounded border border-slate-700/70 px-4 py-1 text-slate-300 transition hover:border-slate-500/70 hover:text-white"
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={() => confirmBlueprintMode()}
-            disabled={!hasBlueprint}
-            className="rounded border border-sky-500/70 bg-sky-500/20 px-4 py-1 text-sky-100 transition hover:border-sky-400/80 hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            完成并锁定
-          </button>
         </div>
       </div>
     </div>
