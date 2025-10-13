@@ -1,4 +1,9 @@
-import { LockClosedIcon, LockOpenIcon, MagnifyingGlassPlusIcon } from '@heroicons/react/24/solid';
+import {
+  ArrowsPointingOutIcon,
+  LockClosedIcon,
+  LockOpenIcon,
+  MagnifyingGlassPlusIcon
+} from '@heroicons/react/24/solid';
 import { useCanvasStore } from '../../stores/canvasStore';
 import type { CanvasMode } from '../../stores/canvasStore';
 import { BlueprintControlsBar } from '../blueprint/BlueprintControlsBar';
@@ -14,7 +19,9 @@ export const CanvasLinkingControls = () => {
     setViewport,
     isLocked,
     setLocked,
-    toggleLocked
+    toggleLocked,
+    focusAllElements,
+    elements
   } = useCanvasStore((state) => ({
     mode: state.mode,
     setMode: state.setMode,
@@ -25,7 +32,9 @@ export const CanvasLinkingControls = () => {
     setViewport: state.setViewport,
     isLocked: state.isLocked,
     setLocked: state.setLocked,
-    toggleLocked: state.toggleLocked
+    toggleLocked: state.toggleLocked,
+    focusAllElements: state.focusAllElements,
+    elements: state.elements
   }));
   const formattedScale = viewportScale.toFixed(viewportScale >= 1 ? 1 : 2);
 
@@ -54,6 +63,15 @@ export const CanvasLinkingControls = () => {
   const handleResetZoom = () => {
     setViewport({ scale: 1 });
   };
+
+  const handleFocusAllElements = () => {
+    if (elements.length === 0) {
+      return;
+    }
+    focusAllElements();
+  };
+
+  const hasElements = elements.length > 0;
 
   const resolveButtonClasses = (targetMode: CanvasMode) =>
     `rounded-md border px-3 py-1 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-sky-400/60 focus:ring-offset-2 focus:ring-offset-slate-900 ${
@@ -93,14 +111,25 @@ export const CanvasLinkingControls = () => {
         )}
       </div>
       <div className="pointer-events-auto flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={handleResetZoom}
-          className="flex items-center gap-1 rounded-md border border-slate-700/80 bg-slate-800/70 px-3 py-1 text-[11px] text-slate-200 transition hover:bg-slate-700/70"
-        >
-          <MagnifyingGlassPlusIcon className="h-4 w-4 text-slate-300" />
-          <span>{formattedScale}×</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleResetZoom}
+            className="flex items-center gap-1 rounded-md border border-slate-700/80 bg-slate-800/70 px-3 py-1 text-[11px] text-slate-200 transition hover:bg-slate-700/70"
+          >
+            <MagnifyingGlassPlusIcon className="h-4 w-4 text-slate-300" />
+            <span>{formattedScale}×</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleFocusAllElements}
+            disabled={!hasElements}
+            className="flex items-center gap-1 rounded-md border border-emerald-500/60 bg-emerald-500/20 px-3 py-1 text-[11px] text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/30 hover:text-emerald-100 disabled:cursor-not-allowed disabled:border-slate-700/60 disabled:bg-transparent disabled:text-slate-500"
+          >
+            <ArrowsPointingOutIcon className="h-4 w-4" />
+            <span>显示全部</span>
+          </button>
+        </div>
         {mode !== 'view' && (
           <button
             type="button"

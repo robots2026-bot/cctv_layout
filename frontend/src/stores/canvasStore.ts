@@ -60,6 +60,7 @@ interface CanvasState {
   resetCanvas: () => void;
   setLocked: (locked: boolean) => void;
   toggleLocked: () => void;
+  focusAllElements: () => void;
 }
 
 const defaultViewport: CanvasViewport = {
@@ -503,6 +504,50 @@ export const useCanvasStore = create<CanvasState>()(
     toggleLocked: () =>
       set((state) => ({
         isLocked: !state.isLocked
-      }))
+      })),
+    focusAllElements: () =>
+      set((state) => {
+        const { elements, viewport } = state;
+        if (!viewport.width || !viewport.height) {
+          return {};
+        }
+        if (elements.length === 0) {
+          return {
+            viewport: {
+              ...viewport,
+              scale: 1,
+              position: { x: 0, y: 0 }
+            }
+          };
+        }
+        const padding = 80;
+        const minX = Math.min(...elements.map((element) => element.position.x));
+        const minY = Math.min(...elements.map((element) => element.position.y));
+        const maxX = Math.max(
+          ...elements.map((element) => element.position.x + element.size.width)
+        );
+        const maxY = Math.max(
+          ...elements.map((element) => element.position.y + element.size.height)
+        );
+        const contentWidth = Math.max(1, maxX - minX);
+        const contentHeight = Math.max(1, maxY - minY);
+        const availableWidth = Math.max(1, viewport.width - padding);
+        const availableHeight = Math.max(1, viewport.height - padding);
+        const scaleFactor = Math.min(availableWidth / contentWidth, availableHeight / contentHeight);
+        const targetScale = Math.min(1, Math.min(4, Math.max(0.2, scaleFactor)));
+        const centerX = minX + contentWidth / 2;
+        const centerY = minY + contentHeight / 2;
+        const position = {
+          x: viewport.width / 2 - targetScale * centerX,
+          y: viewport.height / 2 - targetScale * centerY
+        };
+        return {
+          viewport: {
+            ...viewport,
+            scale: targetScale,
+            position
+          }
+        };
+      })
   }))
 );
