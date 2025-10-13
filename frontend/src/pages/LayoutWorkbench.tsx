@@ -30,7 +30,7 @@ const LayoutWorkbench = () => {
 
   return (
     <div className="relative flex h-full w-full">
-      <div className="relative flex flex-1 flex-col bg-slate-950">
+      <div className="relative flex min-w-0 flex-1 flex-col bg-slate-950">
         {isLoading ? (
           <div className="flex h-full items-center justify-center text-sm text-slate-400">布局加载中...</div>
         ) : (

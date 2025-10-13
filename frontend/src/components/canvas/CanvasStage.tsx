@@ -26,6 +26,7 @@ const loadImageDimensions = (url: string) =>
 
 export const CanvasStage = () => {
   const stageRef = useRef<KonvaStage | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const { viewport, setViewport, background, elements, connections, mode } = useCanvasStore((state) => ({
     viewport: state.viewport,
     setViewport: state.setViewport,
@@ -55,16 +56,33 @@ export const CanvasStage = () => {
 
 
   useEffect(() => {
-    const resize = () => {
-      const container = stageRef.current?.container();
+    const measureContainer = () => {
+      const container = containerRef.current;
       if (!container) return;
       const rect = container.getBoundingClientRect();
       setViewport({ width: rect.width, height: rect.height });
       setDimensions({ width: rect.width, height: rect.height });
     };
-    resize();
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
+
+    measureContainer();
+
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            measureContainer();
+          })
+        : null;
+
+    if (resizeObserver && containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    window.addEventListener('resize', measureContainer);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', measureContainer);
+    };
   }, [setViewport]);
 
   useEffect(() => {
@@ -192,7 +210,7 @@ export const CanvasStage = () => {
   }, [addNotification]);
 
   return (
-    <div className="relative flex flex-1 overflow-hidden bg-slate-950">
+    <div ref={containerRef} className="relative flex min-w-0 flex-1 overflow-hidden bg-slate-950">
       <Stage
         ref={stageRef}
         width={dimensions.width}
