@@ -14,6 +14,15 @@ import { DEVICE_DRAG_DATA_FORMAT } from '../../utils/dragDrop';
 import { DeviceSummary } from '../../types/canvas';
 import { useRealtimeStore } from '../../stores/realtimeStore';
 import { KonvaEventObject } from 'konva/lib/Node';
+import { nanoid } from '../../utils/nanoid';
+
+const loadImageDimensions = (url: string) =>
+  new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.width, height: image.height });
+    image.onerror = (event) => reject(event);
+    image.src = url;
+  });
 
 export const CanvasStage = () => {
   const stageRef = useRef<KonvaStage | null>(null);
@@ -25,7 +34,7 @@ export const CanvasStage = () => {
     connections: state.connections,
     mode: state.mode
   }));
-  const blueprintMode = useUIStore((state) => state.blueprintMode);
+  const addNotification = useUIStore((state) => state.addNotification);
   const [image] = useImage(background?.url ?? '', 'anonymous');
   const [dimensions, setDimensions] = useState({ width: viewport.width, height: viewport.height });
 
@@ -33,6 +42,9 @@ export const CanvasStage = () => {
     const handler = (event: KeyboardEvent) => {
       if (event.key !== 'Delete') return;
       const store = useCanvasStore.getState();
+      if (store.isLocked) {
+        return;
+      }
       if (store.selectedConnectionId) {
         store.removeConnection(store.selectedConnectionId);
       }
@@ -67,10 +79,75 @@ export const CanvasStage = () => {
       event.preventDefault();
     };
 
-    const handleDrop = (event: DragEvent) => {
+    const handleDrop = async (event: DragEvent) => {
       event.preventDefault();
       const dataTransfer = event.dataTransfer;
       if (!dataTransfer) {
+        return;
+      }
+      const store = useCanvasStore.getState();
+      const files = Array.from(dataTransfer.files ?? []);
+      const imageFile = files.find((file) => file.type.startsWith('image/'));
+      if (imageFile) {
+        if (store.mode !== 'blueprint') {
+          addNotification({
+            id: nanoid(),
+            title: '蓝图导入失败',
+            message: '请在蓝图模式下拖拽图纸进行导入',
+            level: 'warning'
+          });
+          return;
+        }
+        if (store.isLocked) {
+          addNotification({
+            id: nanoid(),
+            title: '画布已锁定',
+            message: '解锁后才能导入或替换蓝图',
+            level: 'warning'
+          });
+          return;
+        }
+        const limitBytes = 10 * 1024 * 1024;
+        if (imageFile.size > limitBytes) {
+          addNotification({
+            id: nanoid(),
+            title: '文件过大',
+            message: '蓝图大小需小于 10MB',
+            level: 'error'
+          });
+          return;
+        }
+
+        const objectUrl = URL.createObjectURL(imageFile);
+        try {
+          const { width, height } = await loadImageDimensions(objectUrl);
+          const previousUrl = store.blueprint?.url;
+          store.setBlueprint({
+            url: objectUrl,
+            naturalWidth: width,
+            naturalHeight: height,
+            scale: 1,
+            opacity: 0.6,
+            offset: { x: 0, y: 0 }
+          });
+          if (previousUrl && previousUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(previousUrl);
+          }
+          addNotification({
+            id: nanoid(),
+            title: '蓝图已导入',
+            message: `图纸 "${imageFile.name}" 已添加到画布`,
+            level: 'info'
+          });
+        } catch (error) {
+          URL.revokeObjectURL(objectUrl);
+          addNotification({
+            id: nanoid(),
+            title: '图纸加载失败',
+            message: '无法读取图片尺寸，请重试或更换文件',
+            level: 'error'
+          });
+        }
         return;
       }
       const rawPayload =
@@ -95,8 +172,7 @@ export const CanvasStage = () => {
       if (!pointer) {
         return;
       }
-      const store = useCanvasStore.getState();
-      if (store.mode !== 'layout') {
+      if (store.mode !== 'layout' || store.isLocked) {
         return;
       }
 
@@ -113,7 +189,7 @@ export const CanvasStage = () => {
       container.removeEventListener('dragover', handleDragOver);
       container.removeEventListener('drop', handleDrop);
     };
-  }, []);
+  }, [addNotification]);
 
   return (
     <div className="relative flex flex-1 overflow-hidden bg-slate-950">

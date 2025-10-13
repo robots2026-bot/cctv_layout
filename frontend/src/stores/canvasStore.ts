@@ -34,6 +34,7 @@ interface CanvasState {
   blueprint: CanvasBlueprint | null;
   viewport: CanvasViewport;
   gridSize: number;
+  isLocked: boolean;
   setViewport: (viewport: Partial<CanvasViewport>) => void;
   setBackground: (background: CanvasBackground | null) => void;
   setBlueprint: (blueprint: CanvasBlueprint | null) => void;
@@ -57,6 +58,8 @@ interface CanvasState {
   removeConnection: (connectionId: string) => void;
   removeElement: (elementId: string) => void;
   resetCanvas: () => void;
+  setLocked: (locked: boolean) => void;
+  toggleLocked: () => void;
 }
 
 const defaultViewport: CanvasViewport = {
@@ -80,6 +83,7 @@ export const useCanvasStore = create<CanvasState>()(
     blueprint: null,
     gridSize: 48,
     viewport: defaultViewport,
+    isLocked: true,
     setViewport: (viewport) =>
       set((state) => ({
         viewport: {
@@ -127,7 +131,8 @@ export const useCanvasStore = create<CanvasState>()(
         hoveredElementId: null,
         contextMenu: null,
         linking: { active: false, fromElementId: null, pointer: null },
-        mode: 'view'
+        mode: 'view',
+        isLocked: true
       }),
     addDeviceToCanvas: (device, position) =>
       set((state) => {
@@ -491,7 +496,13 @@ export const useCanvasStore = create<CanvasState>()(
         background: null,
         blueprint: null,
         viewport: defaultViewport,
-        mode: 'view'
-      })
+        mode: 'view',
+        isLocked: true
+      }),
+    setLocked: (locked) => set({ isLocked: locked }),
+    toggleLocked: () =>
+      set((state) => ({
+        isLocked: !state.isLocked
+      }))
   }))
 );

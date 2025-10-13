@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { useCanvasStore } from './canvasStore';
 interface Notification {
   id: string;
   title: string;

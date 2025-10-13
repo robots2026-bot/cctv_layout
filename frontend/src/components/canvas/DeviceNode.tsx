@@ -18,7 +18,8 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
     cancelLinking,
     startLinking,
     completeLinking,
-    mode
+    mode,
+    isLocked
   } = useCanvasStore((state) => ({
     hoveredElementId: state.hoveredElementId,
     setHoveredElement: state.setHoveredElement,
@@ -28,7 +29,8 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
     cancelLinking: state.cancelLinking,
     startLinking: state.startLinking,
     completeLinking: state.completeLinking,
-    mode: state.mode
+    mode: state.mode,
+    isLocked: state.isLocked
   }));
   const isBlueprintEditing = mode === 'blueprint';
   const isHovered = hoveredElementId === element.id;
@@ -67,10 +69,10 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
     <Group
       x={element.position.x}
       y={element.position.y}
-      draggable={mode === 'layout' && !linking.active && !isBlueprintEditing}
+      draggable={mode === 'layout' && !linking.active && !isBlueprintEditing && !isLocked}
       listening={!isBlueprintEditing}
       onDragMove={(event) => {
-        if (isBlueprintEditing) {
+        if (isBlueprintEditing || isLocked) {
           return;
         }
         useCanvasStore.getState().updateElementPosition(element.id, {
@@ -87,7 +89,7 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
         setHoveredElement(null);
       }}
       onMouseDown={(event) => {
-        if (isBlueprintEditing) {
+        if (isBlueprintEditing || isLocked) {
           return;
         }
         if (mode !== 'linking') {
@@ -115,7 +117,7 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
         }
       }}
       onMouseUp={(event) => {
-        if (isBlueprintEditing) {
+        if (isBlueprintEditing || isLocked) {
           return;
         }
         const store = useCanvasStore.getState();
@@ -130,7 +132,7 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
         completeLinking(element.id);
       }}
       onDragStart={(event) => {
-        if (isBlueprintEditing) {
+        if (isBlueprintEditing || isLocked) {
           event.cancelBubble = true;
           return;
         }
@@ -143,7 +145,7 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
         event.target.getLayer()?.batchDraw();
       }}
       onContextMenu={(event) => {
-        if (isBlueprintEditing) {
+        if (isBlueprintEditing || isLocked) {
           return;
         }
         event.evt.preventDefault();

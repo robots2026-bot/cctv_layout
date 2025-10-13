@@ -1,4 +1,1 @@
-import { BlueprintDrawer } from './BlueprintDrawer';
-export const BlueprintManager = () => {
-  return <BlueprintDrawer />;
-};
+export const BlueprintManager = () => null;
