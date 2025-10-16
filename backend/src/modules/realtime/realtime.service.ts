@@ -16,12 +16,15 @@ export class RealtimeService {
       this.logger.warn('Attempted to emit device update without an active server');
       return;
     }
+    const model =
+      typeof device.metadata?.model === 'string' ? (device.metadata?.model as string) : undefined;
     this.server.to(`project:${device.projectId}`).emit('device.update', {
       id: device.id,
       name: device.name,
       type: device.type,
       ip: device.ipAddress,
-      status: device.status
+      status: device.status,
+      model
     });
   }
 

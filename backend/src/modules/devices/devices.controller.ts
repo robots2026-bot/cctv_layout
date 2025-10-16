@@ -14,7 +14,8 @@ export class ProjectDevicesController {
         name: device.name,
         type: device.type,
         ip: device.ipAddress,
-        status: device.status
+        status: device.status,
+        model: typeof device.metadata?.model === 'string' ? (device.metadata?.model as string) : undefined
       }))
     );
   }

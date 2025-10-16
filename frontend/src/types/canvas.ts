@@ -70,5 +70,6 @@ export interface DeviceSummary {
   name: string;
   type: string;
   ip?: string;
+  model?: string;
   status?: 'online' | 'offline' | 'warning' | 'unknown';
 }

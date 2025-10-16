@@ -24,6 +24,10 @@ interface RealtimeState {
   connect: () => void;
   disconnect: () => void;
   fetchAvailableDevices: (projectId: string) => Promise<void>;
+  registerDevice: (
+    projectId: string,
+    payload: { name?: string; type: string; ip: string; model: string; status?: DeviceSummary['status'] }
+  ) => Promise<DeviceSummary | null>;
   handleEvent: (message: RealtimeEvent) => void;
   consumeDevice: (deviceId: string) => void;
   restoreDevice: (device: DeviceSummary) => void;
@@ -86,6 +90,58 @@ export const useRealtimeStore = create<RealtimeState>()(
         set({ availableDevices: filtered });
       } catch (error) {
         console.error('获取可用设备失败', error);
+      }
+    },
+    registerDevice: async (projectId, payload) => {
+      try {
+        const desiredStatus =
+          payload.status && payload.status !== 'warning' ? payload.status : undefined;
+        const normalizedName = payload.name?.trim() ?? '';
+        const normalizedType = payload.type.trim();
+        const normalizedIp = payload.ip.trim();
+        const normalizedModel = payload.model.trim();
+
+        if (!normalizedType || !normalizedIp || !normalizedModel) {
+          throw new Error('设备类型、IP 地址与设备型号不能为空');
+        }
+
+        const fallbackName = normalizedName || `${normalizedType}-${normalizedIp}`;
+
+        const response = await apiClient.post(`/projects/${projectId}/devices/register`, {
+          name: fallbackName,
+          type: normalizedType,
+          ipAddress: normalizedIp,
+          model: normalizedModel,
+          status: desiredStatus ?? 'unknown'
+        });
+        const device = response.data as {
+          id: string;
+          name: string;
+          type: string;
+          ipAddress?: string | null;
+          status?: string | null;
+          metadata?: { model?: string | null };
+        };
+
+        const summary: DeviceSummary = {
+          id: device.id,
+          name: device.name,
+          type: device.type,
+          ip: device.ipAddress ?? undefined,
+          model: device.metadata?.model ?? undefined,
+          status: (device.status as DeviceSummary['status']) ?? 'unknown'
+        };
+
+        set((state) => ({
+          availableDevices: state.availableDevices.some((item) => item.id === summary.id)
+            ? state.availableDevices.map((item) => (item.id === summary.id ? summary : item))
+            : [...state.availableDevices, summary]
+        }));
+
+        return summary;
+      } catch (error) {
+        console.error('手动注册设备失败', error);
+        return null;
       }
     },
     consumeDevice: (deviceId: string) => {

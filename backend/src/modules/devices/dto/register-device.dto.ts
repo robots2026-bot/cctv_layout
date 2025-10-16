@@ -20,6 +20,11 @@ export class RegisterDeviceDto {
   @IsOptional()
   ipAddress?: string;
 
+  @IsString()
+  @MaxLength(80)
+  @IsOptional()
+  model?: string;
+
   @IsIn(['online', 'offline', 'unknown'])
   @IsOptional()
   status?: DeviceStatus;

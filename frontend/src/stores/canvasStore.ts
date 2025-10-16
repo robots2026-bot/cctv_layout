@@ -145,6 +145,7 @@ export const useCanvasStore = create<CanvasState>()(
           metadata: {
             ip: device.ip,
             status: device.status,
+            model: device.model,
             sourceDeviceId: device.id
           },
           position: position ?? { x: 50, y: 50 },
@@ -464,6 +465,7 @@ export const useCanvasStore = create<CanvasState>()(
               name: target.name,
               type: target.type,
               ip: target.metadata?.ip as string | undefined,
+              model: target.metadata?.model as string | undefined,
               status:
                 (target.metadata?.status as DeviceSummary['status']) ??
                 ('unknown' as DeviceSummary['status'])

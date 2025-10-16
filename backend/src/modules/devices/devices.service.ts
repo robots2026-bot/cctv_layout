@@ -30,12 +30,17 @@ export class DevicesService {
     });
 
     if (existing) {
+      const metadata = { ...(existing.metadata ?? {}) };
+      if (typeof device.model === 'string' && device.model.trim()) {
+        metadata.model = device.model.trim();
+      }
       this.logger.debug(`Updating device ${existing.id} from sync payload`);
       Object.assign(existing, {
         name: device.name,
         type: device.type,
         status: device.status ?? existing.status,
-        lastSeenAt: new Date()
+        lastSeenAt: new Date(),
+        metadata: Object.keys(metadata).length > 0 ? metadata : null
       });
       const updated = await this.devicesRepository.save(existing);
       this.realtimeService.emitDeviceUpdate(updated);
@@ -50,13 +55,18 @@ export class DevicesService {
       return updated;
     }
 
+    const metadata = typeof device.model === 'string' && device.model.trim()
+      ? { model: device.model.trim() }
+      : undefined;
+
     const created = this.devicesRepository.create({
       projectId: device.projectId,
       name: device.name,
       type: device.type,
       ipAddress: device.ipAddress,
       status: device.status ?? 'unknown',
-      lastSeenAt: new Date()
+      lastSeenAt: new Date(),
+      metadata: metadata ?? null
     });
     const saved = await this.devicesRepository.save(created);
     this.realtimeService.emitDeviceUpdate(saved);
