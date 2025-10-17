@@ -1,8 +1,16 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { CanvasBlueprint, CanvasConnection, CanvasElement, CanvasLayout, CanvasViewport, DeviceSummary } from '../types/canvas';
+import {
+  CanvasBlueprint,
+  CanvasConnection,
+  CanvasElement,
+  CanvasLayout,
+  CanvasViewport,
+  DeviceSummary
+} from '../types/canvas';
 import { nanoid } from '../utils/nanoid';
 import { useRealtimeStore } from './realtimeStore';
+import { getDeviceCategory } from '../utils/deviceVisual';
 
 interface CanvasBackground {
   url: string | null;
@@ -68,6 +76,146 @@ const defaultViewport: CanvasViewport = {
   height: 800,
   scale: 1,
   position: { x: 0, y: 0 }
+};
+
+const getElementKey = (element: CanvasElement): string => element.deviceId ?? element.id;
+
+const buildCategoryLookup = (elements: CanvasElement[]) => {
+  const lookup = new Map<string, ReturnType<typeof getDeviceCategory>>();
+  elements.forEach((element) => {
+    lookup.set(getElementKey(element), getDeviceCategory(element.type));
+  });
+  return lookup;
+};
+
+const listConnectionsFor = (connections: CanvasConnection[], key: string) =>
+  connections.filter((connection) =>
+    connection.fromDeviceId === key || connection.toDeviceId === key
+  );
+
+const resolveOtherKey = (connection: CanvasConnection, key: string) =>
+  connection.fromDeviceId === key ? connection.toDeviceId : connection.fromDeviceId;
+
+const createsCycle = (
+  connections: CanvasConnection[],
+  startKey: string,
+  targetKey: string
+) => {
+  if (connections.length === 0) return false;
+  const adjacency = new Map<string, Set<string>>();
+  const ensure = (key: string) => {
+    if (!key) return;
+    if (!adjacency.has(key)) {
+      adjacency.set(key, new Set());
+    }
+  };
+
+  connections.forEach((connection) => {
+    const fromKey = connection.fromDeviceId ?? connection.id;
+    const toKey = connection.toDeviceId ?? connection.id;
+    if (!fromKey || !toKey) return;
+    ensure(fromKey);
+    ensure(toKey);
+    adjacency.get(fromKey)?.add(toKey);
+    adjacency.get(toKey)?.add(fromKey);
+  });
+
+  ensure(startKey);
+  ensure(targetKey);
+
+  const visited = new Set<string>();
+  const queue: string[] = [startKey];
+  visited.add(startKey);
+
+  while (queue.length > 0) {
+    const current = queue.shift() as string;
+    if (current === targetKey) {
+      return true;
+    }
+    const neighbors = adjacency.get(current);
+    if (!neighbors) continue;
+    neighbors.forEach((neighbor) => {
+      if (!visited.has(neighbor)) {
+        visited.add(neighbor);
+        queue.push(neighbor);
+      }
+    });
+  }
+
+  return false;
+};
+
+const evaluateEndpointConstraints = (
+  element: CanvasElement,
+  other: CanvasElement,
+  connections: CanvasConnection[],
+  lookup: Map<string, ReturnType<typeof getDeviceCategory>>
+): string | null => {
+  const category = lookup.get(getElementKey(element)) ?? getDeviceCategory(element.type);
+  const otherCategory = lookup.get(getElementKey(other)) ?? getDeviceCategory(other.type);
+  const key = getElementKey(element);
+
+  if (category === 'camera') {
+    if (otherCategory === 'camera') {
+      return '摄像机之间禁止连接';
+    }
+    if (otherCategory !== 'bridge' && otherCategory !== 'switch') {
+      return '摄像机只能连接交换机或网桥';
+    }
+    const existing = listConnectionsFor(connections, key);
+    if (existing.length >= 1) {
+      return '摄像机仅允许一条连接';
+    }
+  }
+
+  if (category === 'bridge') {
+    const existing = listConnectionsFor(connections, key);
+    let bridgeToBridgeCount = 0;
+    let bridgeToOthersCount = 0;
+    existing.forEach((connection) => {
+      const otherKey = resolveOtherKey(connection, key);
+      const otherCat = otherKey
+        ? lookup.get(otherKey) ?? 'other'
+        : 'other';
+      if (otherCat === 'bridge') {
+        bridgeToBridgeCount += 1;
+      } else {
+        bridgeToOthersCount += 1;
+      }
+    });
+
+    if (otherCategory === 'bridge' && bridgeToBridgeCount >= 1) {
+      return '网桥之间仅允许一条连接';
+    }
+    if (otherCategory !== 'bridge' && bridgeToOthersCount >= 1) {
+      return '网桥对其他设备仅允许一条连接';
+    }
+  }
+
+  return null;
+};
+
+const canEstablishConnection = (
+  elements: CanvasElement[],
+  connections: CanvasConnection[],
+  fromElement: CanvasElement,
+  toElement: CanvasElement
+) => {
+  const lookup = buildCategoryLookup(elements);
+  const fromKey = getElementKey(fromElement);
+  const toKey = getElementKey(toElement);
+  if (createsCycle(connections, fromKey, toKey)) {
+    return { allowed: false, reason: '连接将形成环路，已阻止' } as const;
+  }
+  const fromCheck = evaluateEndpointConstraints(fromElement, toElement, connections, lookup);
+  if (fromCheck) {
+    return { allowed: false, reason: fromCheck };
+  }
+  const toCheck = evaluateEndpointConstraints(toElement, fromElement, connections, lookup);
+  if (toCheck) {
+    return { allowed: false, reason: toCheck };
+  }
+  return { allowed: true as const };
 };
 
 export const useCanvasStore = create<CanvasState>()(
@@ -366,7 +514,14 @@ export const useCanvasStore = create<CanvasState>()(
         });
         if (exists) {
           return {
-            linking: { active: false, fromElementId: null, pointer: null }
+            linking: { active: true, fromElementId: null, pointer: null }
+          };
+        }
+        const validation = canEstablishConnection(state.elements, state.connections, fromElement, toElement);
+        if (!validation.allowed) {
+          console.warn(validation.reason);
+          return {
+            linking: { active: true, fromElementId: null, pointer: null }
           };
         }
         const center = (element: CanvasElement) => ({
@@ -422,7 +577,14 @@ export const useCanvasStore = create<CanvasState>()(
         });
         if (exists) {
           return {
-            linking: { active: false, fromElementId: null, pointer: null }
+            linking: { active: true, fromElementId: null, pointer: null }
+          };
+        }
+        const validation = canEstablishConnection(state.elements, state.connections, fromElement, toElement);
+        if (!validation.allowed) {
+          console.warn(validation.reason);
+          return {
+            linking: { active: true, fromElementId: null, pointer: null }
           };
         }
         const center = (element: CanvasElement) => ({

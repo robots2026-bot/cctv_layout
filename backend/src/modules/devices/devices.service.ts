@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { DeviceEntity } from './entities/device.entity';
 import { RegisterDeviceDto } from './dto/register-device.dto';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -21,24 +21,56 @@ export class DevicesService {
     return this.devicesRepository.find({ where: { projectId } });
   }
 
-  async registerOrUpdate(device: RegisterDeviceDto): Promise<DeviceEntity> {
-    const existing = await this.devicesRepository.findOne({
-      where: {
-        projectId: device.projectId,
-        ipAddress: device.ipAddress ? device.ipAddress : IsNull()
-      }
-    });
+  async registerOrUpdate(projectId: string, payload: RegisterDeviceDto): Promise<DeviceEntity> {
+    const trimmedType = payload.type.trim();
+    const trimmedIp = payload.ipAddress?.trim();
+    const trimmedName = payload.name?.trim();
+    const trimmedModel = payload.model?.trim();
+
+    const sanitizedIp = trimmedIp && trimmedIp.length > 0 ? trimmedIp : null;
+
+    const baseName =
+      trimmedName && trimmedName.length > 0
+        ? trimmedName
+        : trimmedModel && trimmedModel.length > 0
+          ? `${trimmedType}-${trimmedModel}`
+          : sanitizedIp
+            ? `${trimmedType}-${sanitizedIp}`
+            : `${trimmedType}-${new Date().getTime().toString(36)}`;
+
+    let existing: DeviceEntity | null = null;
+    if (sanitizedIp) {
+      existing = await this.devicesRepository.findOne({
+        where: {
+          projectId,
+          ipAddress: sanitizedIp
+        }
+      });
+    } else {
+      existing = await this.devicesRepository.findOne({
+        where: {
+          projectId,
+          type: trimmedType,
+          name: baseName
+        }
+      });
+    }
+
+    const desiredStatus = payload.status ?? (existing ? existing.status : 'unknown');
+
+    const effectiveName = existing?.name ?? baseName;
 
     if (existing) {
       const metadata = { ...(existing.metadata ?? {}) };
-      if (typeof device.model === 'string' && device.model.trim()) {
-        metadata.model = device.model.trim();
+      if (trimmedModel) {
+        metadata.model = trimmedModel;
       }
       this.logger.debug(`Updating device ${existing.id} from sync payload`);
       Object.assign(existing, {
-        name: device.name,
-        type: device.type,
-        status: device.status ?? existing.status,
+        name: effectiveName,
+        type: trimmedType,
+        ipAddress: sanitizedIp,
+        status: desiredStatus,
         lastSeenAt: new Date(),
         metadata: Object.keys(metadata).length > 0 ? metadata : null
       });
@@ -55,16 +87,16 @@ export class DevicesService {
       return updated;
     }
 
-    const metadata = typeof device.model === 'string' && device.model.trim()
-      ? { model: device.model.trim() }
+    const metadata = trimmedModel
+      ? { model: trimmedModel }
       : undefined;
 
     const created = this.devicesRepository.create({
-      projectId: device.projectId,
-      name: device.name,
-      type: device.type,
-      ipAddress: device.ipAddress,
-      status: device.status ?? 'unknown',
+      projectId,
+      name: effectiveName,
+      type: trimmedType,
+      ipAddress: sanitizedIp,
+      status: desiredStatus,
       lastSeenAt: new Date(),
       metadata: metadata ?? null
     });

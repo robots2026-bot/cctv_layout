@@ -26,7 +26,7 @@ interface RealtimeState {
   fetchAvailableDevices: (projectId: string) => Promise<void>;
   registerDevice: (
     projectId: string,
-    payload: { name?: string; type: string; ip: string; model: string; status?: DeviceSummary['status'] }
+    payload: { name?: string; type: string; ip?: string; model: string; status?: DeviceSummary['status'] }
   ) => Promise<DeviceSummary | null>;
   handleEvent: (message: RealtimeEvent) => void;
   consumeDevice: (deviceId: string) => void;
@@ -98,19 +98,20 @@ export const useRealtimeStore = create<RealtimeState>()(
           payload.status && payload.status !== 'warning' ? payload.status : undefined;
         const normalizedName = payload.name?.trim() ?? '';
         const normalizedType = payload.type.trim();
-        const normalizedIp = payload.ip.trim();
+        const normalizedIp = payload.ip?.trim() ?? '';
         const normalizedModel = payload.model.trim();
+        const requiresIp = normalizedType.toLowerCase() !== 'switch';
 
-        if (!normalizedType || !normalizedIp || !normalizedModel) {
-          throw new Error('设备类型、IP 地址与设备型号不能为空');
+        if (!normalizedType || !normalizedModel || (requiresIp && !normalizedIp)) {
+          throw new Error('请填写设备类型、型号，及必要时的 IP 地址');
         }
 
-        const fallbackName = normalizedName || `${normalizedType}-${normalizedIp}`;
+        const fallbackName = normalizedName || (normalizedIp ? `${normalizedType}-${normalizedIp}` : `${normalizedType}-${normalizedModel || Date.now().toString(36)}`);
 
         const response = await apiClient.post(`/projects/${projectId}/devices/register`, {
           name: fallbackName,
           type: normalizedType,
-          ipAddress: normalizedIp,
+          ipAddress: normalizedIp || undefined,
           model: normalizedModel,
           status: desiredStatus ?? 'unknown'
         });

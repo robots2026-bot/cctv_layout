@@ -1,8 +1,7 @@
 import { Circle, Group, Rect, Text } from 'react-konva';
 import { CanvasElement } from '../../types/canvas';
 import { useCanvasStore } from '../../stores/canvasStore';
-import { useUIStore } from '../../stores/uiStore';
-import { getDeviceCategory, getStatusVisual } from '../../utils/deviceVisual';
+import { deriveSwitchLabel, getDeviceCategory, getStatusVisual } from '../../utils/deviceVisual';
 
 interface DeviceNodeProps {
   element: CanvasElement;
@@ -35,11 +34,11 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
   const isBlueprintEditing = mode === 'blueprint';
   const isHovered = hoveredElementId === element.id;
 
-  const textOffsetX = 56;
-  const textWidth = Math.max(80, element.size.width - textOffsetX - 12);
-
   const statusConfig = getStatusVisual(element.metadata?.status as string | undefined);
   const category = getDeviceCategory(element.type);
+
+  const textOffsetX = category === 'switch' ? 0 : 56;
+  const textWidth = category === 'switch' ? element.size.width : Math.max(80, element.size.width - textOffsetX - 12);
 
   const renderTypeIcon = () => {
     const accent = isHovered ? '#f8fafc' : '#e2e8f0';
@@ -157,34 +156,71 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
         openContextMenu(element.id, { x: clientX, y: clientY });
       }}
     >
-      <Rect
-        width={element.size.width}
-        height={element.size.height}
-        cornerRadius={6}
-        fill={statusConfig.nodeFill}
-        stroke={linking.active && linking.fromElementId === element.id ? '#38bdf8' : isHovered ? '#f8fafc' : '#0b1120'}
-        strokeWidth={linking.active && linking.fromElementId === element.id ? 2.5 : isHovered ? 2 : 1.5}
-      />
-      <Group x={12} y={14}>{renderTypeIcon()}</Group>
-      <Text
-        text={element.metadata?.ip ?? '待分配 IP'}
-        fontSize={12}
-        fill={statusConfig.secondaryTextColor}
-        x={textOffsetX}
-        y={18}
-        width={textWidth}
-        ellipsis
-      />
-      <Text
-        text={element.name}
-        fontSize={13}
-        fontStyle="bold"
-        fill={statusConfig.textColor}
-        x={textOffsetX}
-        y={36}
-        width={textWidth}
-        ellipsis
-      />
+      {category === 'switch' ? (
+        <>
+          {(() => {
+            const baseRadius = Math.min(element.size.width, element.size.height) / 2;
+            const fillColor = '#2563eb';
+            const strokeColor = linking.active && linking.fromElementId === element.id ? '#38bdf8' : isHovered ? '#93c5fd' : '#1d4ed8';
+            const label = element.name?.trim() || deriveSwitchLabel((element.metadata?.model as string | undefined) || 'Switch');
+            return (
+              <>
+                <Circle
+                  x={element.size.width / 2}
+                  y={element.size.height / 2}
+                  radius={baseRadius}
+                  fill={fillColor}
+                  stroke={strokeColor}
+                  strokeWidth={linking.active && linking.fromElementId === element.id ? 2.5 : isHovered ? 2 : 1.5}
+                />
+                <Text
+                  text={label}
+                  fontSize={16}
+                  fontStyle="bold"
+                  fill="#f8fafc"
+                  x={0}
+                  y={element.size.height / 2 - 10}
+                  width={element.size.width}
+                  align="center"
+                  wrap="none"
+                  ellipsis
+                />
+              </>
+            );
+          })()}
+        </>
+      ) : (
+        <>
+          <Rect
+            width={element.size.width}
+            height={element.size.height}
+            cornerRadius={6}
+            fill={statusConfig.nodeFill}
+            stroke={linking.active && linking.fromElementId === element.id ? '#38bdf8' : isHovered ? '#f8fafc' : '#0b1120'}
+            strokeWidth={linking.active && linking.fromElementId === element.id ? 2.5 : isHovered ? 2 : 1.5}
+          />
+          <Group x={12} y={14}>{renderTypeIcon()}</Group>
+          <Text
+            text={element.metadata?.ip ?? '待分配 IP'}
+            fontSize={12}
+            fill={statusConfig.secondaryTextColor}
+            x={textOffsetX}
+            y={18}
+            width={textWidth}
+            ellipsis
+          />
+          <Text
+            text={element.name}
+            fontSize={13}
+            fontStyle="bold"
+            fill={statusConfig.textColor}
+            x={textOffsetX}
+            y={36}
+            width={textWidth}
+            ellipsis
+          />
+        </>
+      )}
     </Group>
   );
 };

@@ -22,6 +22,6 @@ export class ProjectDevicesController {
 
   @Post('register')
   register(@Param('projectId') projectId: string, @Body() dto: RegisterDeviceDto) {
-    return this.devicesService.registerOrUpdate({ ...dto, projectId });
+    return this.devicesService.registerOrUpdate(projectId, dto);
   }
 }

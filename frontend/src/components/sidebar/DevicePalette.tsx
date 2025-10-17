@@ -7,6 +7,7 @@ import { DeviceSummary } from '../../types/canvas';
 import { DEVICE_DRAG_DATA_FORMAT } from '../../utils/dragDrop';
 import {
   DeviceCategory,
+  deriveSwitchLabel,
   getDeviceCategory,
   getDeviceTypeVisual,
   getStatusVisual
@@ -16,7 +17,39 @@ interface DevicePaletteProps {
   projectId: string;
 }
 
-const DeviceListIcon = ({ category, accent }: { category: DeviceCategory; accent: string }) => {
+const DeviceListIcon = ({
+  category,
+  accent,
+  label
+}: {
+  category: DeviceCategory;
+  accent: string;
+  label?: string;
+}) => {
+  if (category === 'switch') {
+    return (
+      <svg viewBox="0 0 40 40" className="h-8 w-8" aria-hidden="true">
+        <circle
+          cx="20"
+          cy="20"
+          r="16"
+          fill="#0f172a"
+          stroke={accent}
+          strokeWidth="2"
+        />
+        <text
+          x="20"
+          y="23"
+          textAnchor="middle"
+          fontSize="11"
+          fontFamily="Inter, system-ui, monospace"
+          fill={accent}
+        >
+          {deriveSwitchLabel(label)}
+        </text>
+      </svg>
+    );
+  }
   if (category === 'bridge') {
     return (
       <svg viewBox="0 0 32 32" className="h-8 w-8" aria-hidden="true" style={{ color: accent }}>
@@ -114,9 +147,10 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
     const trimmedType = manualForm.type.trim();
     const trimmedModel = manualForm.model.trim();
     const trimmedIp = manualForm.ip.trim();
+    const requiresIp = trimmedType.toLowerCase() !== 'switch';
 
-    if (!trimmedType || !trimmedModel || !trimmedIp) {
-      setSubmitError('请填写设备类型、设备型号与 IP 地址');
+    if (!trimmedType || !trimmedModel || (requiresIp && !trimmedIp)) {
+      setSubmitError(requiresIp ? '请填写设备类型、设备型号与 IP 地址' : '请填写设备类型与设备型号');
       return;
     }
 
@@ -126,7 +160,7 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
       name: trimmedName,
       type: trimmedType,
       model: trimmedModel,
-      ip: trimmedIp
+      ip: trimmedIp || undefined
     });
 
     if (!result) {
@@ -201,7 +235,11 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
                     borderColor: status.fill
                   }}
                 >
-                  <DeviceListIcon category={category} accent={status.textColor} />
+                  <DeviceListIcon
+                    category={category}
+                    accent={status.textColor}
+                    label={device.model ?? device.name}
+                  />
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <div className="flex items-start justify-between gap-2">
                       <span
@@ -260,7 +298,8 @@ interface ManualDeviceDialogProps {
 const MANUAL_DEVICE_TYPES = [
   { label: 'Camera', value: 'Camera' },
   { label: 'NVR', value: 'NVR' },
-  { label: 'Bridge', value: 'Bridge' }
+  { label: 'Bridge', value: 'Bridge' },
+  { label: 'Switch', value: 'Switch' }
 ];
 
 const ManualDeviceDialog = ({
@@ -335,7 +374,7 @@ const ManualDeviceDialog = ({
                     </option>
                   ))}
                 </select>
-                <span className="text-[11px] text-slate-500">当前支持 Camera、NVR、Bridge 三类设备。</span>
+                <span className="text-[11px] text-slate-500">当前支持 Camera、NVR、Bridge、Switch 四类设备。</span>
               </label>
 
               <label className="flex flex-col gap-2">
@@ -360,12 +399,12 @@ const ManualDeviceDialog = ({
                 <input
                   value={form.ip}
                   onChange={(event) => onChange({ ...form, ip: event.target.value })}
-                  required
+                  required={form.type !== 'Switch'}
                   maxLength={45}
                   placeholder="例如：192.168.10.15"
                   className="w-full rounded border border-slate-800/80 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-brand-400/80 focus:outline-none"
                 />
-                <span className="text-[11px] text-slate-500">支持 IPv4 或 IPv6。</span>
+                <span className="text-[11px] text-slate-500">支持 IPv4 或 IPv6（Switch 类型可留空）。</span>
               </label>
 
               {errorMessage && (

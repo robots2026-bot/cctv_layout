@@ -1,8 +1,7 @@
 import { Arrow, Group, Label, Line, Tag, Text } from 'react-konva';
 import { CanvasConnection } from '../../types/canvas';
 import { useCanvasStore } from '../../stores/canvasStore';
-import { useUIStore } from '../../stores/uiStore';
-import { getStatusVisual } from '../../utils/deviceVisual';
+import { getDeviceCategory, getStatusVisual } from '../../utils/deviceVisual';
 import type { KonvaEventObject } from 'konva/lib/Node';
 
 interface ConnectionLineProps {
@@ -79,40 +78,49 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
   }));
   const isBlueprintEditing = mode === 'blueprint';
 
-  const resolvePoint = (deviceKey?: string, fallback?: { x: number; y: number }) => {
-    if (!deviceKey) {
-      return fallback;
+  const findElementByKey = (deviceKey?: string) =>
+    deviceKey ? elements.find((item) => item.deviceId === deviceKey || item.id === deviceKey) : undefined;
+
+  const fromElement = findElementByKey(connection.fromDeviceId);
+  const toElement = findElementByKey(connection.toDeviceId);
+
+  const resolvePoint = (element: typeof fromElement, fallback?: { x: number; y: number }) => {
+    if (element) {
+      return {
+        x: element.position.x + element.size.width / 2,
+        y: element.position.y + element.size.height / 2
+      };
     }
-    const element = elements.find(
-      (item) => item.deviceId === deviceKey || item.id === deviceKey
-    );
-    if (!element) {
-      return fallback;
-    }
-    return {
-      x: element.position.x + element.size.width / 2,
-      y: element.position.y + element.size.height / 2
-    };
+    return fallback;
   };
 
-  const fromPoint = resolvePoint(connection.fromDeviceId, connection.from);
-  const toPoint = resolvePoint(connection.toDeviceId, connection.to);
+  const fromPoint = resolvePoint(fromElement, connection.from);
+  const toPoint = resolvePoint(toElement, connection.to);
 
   if (!fromPoint || !toPoint) {
     return null;
   }
 
-  const segments = calculateConnectionSegments(fromPoint, toPoint, connection.kind);
-  if (!segments) {
+  const dx = toPoint.x - fromPoint.x;
+  const dy = toPoint.y - fromPoint.y;
+  const length = Math.hypot(dx, dy);
+  if (length === 0) {
     return null;
   }
 
-  const { upstream, downstream, baseDash, length } = segments;
-  const dx = toPoint.x - fromPoint.x;
-  const dy = toPoint.y - fromPoint.y;
+  const fromCategory = getDeviceCategory(fromElement?.type);
+  const toCategory = getDeviceCategory(toElement?.type);
+  const isBridgeToBridge = fromCategory === 'bridge' && toCategory === 'bridge';
+
+  const segments = isBridgeToBridge
+    ? calculateConnectionSegments(fromPoint, toPoint, connection.kind)
+    : null;
+
+  const upstream = segments?.upstream ?? { start: fromPoint, end: toPoint };
+  const downstream = segments?.downstream ?? { start: fromPoint, end: toPoint };
+  const baseDash = isBridgeToBridge ? [10, 6] : undefined;
 
   const status = getStatusVisual(connection.status ?? 'online');
-
 
   const formatLabel = (value?: number, arrow: string = '↕') =>
     value !== undefined ? `${arrow} ${Math.round(value)} Mb/s` : undefined;
@@ -212,40 +220,67 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
         strokeWidth={strokeWidthMain}
         dash={baseDash}
       />
-      <Line
-        points={makePoints(downstream.start, downstream.end)}
-        stroke={status.fill}
-        opacity={downstreamOpacity}
-        strokeWidth={strokeWidthSecondary}
-        dash={baseDash}
-      />
-
-      {ARROW_POSITIONS.map((t) =>
-        createArrow(t, upstream.start, upstream.end, status.fill, arrowOpacityMain)
-      )}
-      {ARROW_POSITIONS.map((t) =>
-        createArrow(t, downstream.start, downstream.end, status.fill, downstreamOpacity)
+      {isBridgeToBridge && (
+        <Line
+          points={makePoints(downstream.start, downstream.end)}
+          stroke={status.fill}
+          opacity={downstreamOpacity}
+          strokeWidth={strokeWidthSecondary}
+          dash={baseDash}
+        />
       )}
 
-      {upstreamLabel && (
-        <Label
-          x={upstreamLabelPos.x + labelOffsetVec.x * LABEL_OFFSET}
-          y={upstreamLabelPos.y + labelOffsetVec.y * LABEL_OFFSET}
-          listening={false}
-        >
-          <Tag fill={status.fill} opacity={0.85} cornerRadius={6} />
-          <Text text={upstreamLabel} fill={status.textColor} fontSize={11} padding={6} />
-        </Label>
-      )}
-      {downstreamLabel && (
-        <Label
-          x={downstreamLabelPos.x - labelOffsetVec.x * LABEL_OFFSET}
-          y={downstreamLabelPos.y - labelOffsetVec.y * LABEL_OFFSET}
-          listening={false}
-        >
-          <Tag fill={status.fill} opacity={0.65} cornerRadius={6} />
-          <Text text={downstreamLabel} fill={status.textColor} fontSize={11} padding={6} />
-        </Label>
+      {isBridgeToBridge &&
+        ARROW_POSITIONS.map((t) =>
+          createArrow(t, upstream.start, upstream.end, status.fill, arrowOpacityMain)
+        )}
+      {isBridgeToBridge &&
+        ARROW_POSITIONS.map((t) =>
+          createArrow(t, downstream.start, downstream.end, status.fill, downstreamOpacity)
+        )}
+
+      {isBridgeToBridge ? (
+        <>
+          {upstreamLabel && (
+            <Label
+              x={upstreamLabelPos.x + labelOffsetVec.x * LABEL_OFFSET}
+              y={upstreamLabelPos.y + labelOffsetVec.y * LABEL_OFFSET}
+              listening={false}
+            >
+              <Tag fill={status.fill} opacity={0.85} cornerRadius={6} />
+              <Text text={upstreamLabel} fill={status.textColor} fontSize={11} padding={6} />
+            </Label>
+          )}
+          {downstreamLabel && (
+            <Label
+              x={downstreamLabelPos.x - labelOffsetVec.x * LABEL_OFFSET}
+              y={downstreamLabelPos.y - labelOffsetVec.y * LABEL_OFFSET}
+              listening={false}
+            >
+              <Tag fill={status.fill} opacity={0.65} cornerRadius={6} />
+              <Text text={downstreamLabel} fill={status.textColor} fontSize={11} padding={6} />
+            </Label>
+          )}
+        </>
+      ) : (
+        (() => {
+          const combinedLabel = [upstreamLabel, downstreamLabel]
+            .filter((value): value is string => Boolean(value))
+            .join(' / ');
+          if (!combinedLabel) {
+            return null;
+          }
+          return (
+            <Label
+              x={upstreamLabelPos.x + labelOffsetVec.y * LABEL_OFFSET}
+              y={upstreamLabelPos.y - labelOffsetVec.x * LABEL_OFFSET}
+              listening={false}
+            >
+              <Tag fill={status.fill} opacity={0.85} cornerRadius={6} />
+              <Text text={combinedLabel} fill={status.textColor} fontSize={11} padding={6} />
+            </Label>
+          );
+        })()
       )}
     </Group>
   );
