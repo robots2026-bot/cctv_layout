@@ -219,6 +219,10 @@
 | `projects.updated` | 项目增删改、恢复 | `{ projectId, action: "created" \| "updated" \| "archived" \| "deleted" \| "restored" }` |
 | `layout.version` | 布局保存生成新版本 | `{ layoutId, versionId }` |
 
+### 4.3 设备同步事件（后续扩展）
+- 当前版本仅依赖 `device.update` 推送。
+- 若平台后续直接触发实时消息，可采用 `device.synced`，Payload 与 `device.update` 保持一致。
+
 ### 4.2 客户端建议的订阅流程
 1. 连接后发送 `socket.emit('project.join', { projectId })`（待后端实现），加入项目房间。
 2. 在路由切换时调用 `project.leave` 退出旧项目，避免冗余推送。
@@ -229,6 +233,81 @@
 - 新增或调整接口前，必须在本文件中更新对应章节，并标记版本号/日期。
 - 前后端需以此文档为准完成联调，未经记录的接口视为未对齐。
 - 重要字段或响应格式变化需同步评估：数据库迁移、权限策略、实时推送影响。
+
+## 6. 设备同步接口（Platform → Backend）
+
+平台通过部署在工地现场的 NanoPi2 网关周期性采集设备信息（在线状态、IP、延迟、类型、型号等），并通过 HTTP 推送到后端。每次推送视为“当前工地设备的完整快照”，后端需用最新数据覆盖旧状态，并刷新画布 / 未布局列表。本阶段接口仅做核心字段校验，不做鉴权。
+
+### 6.1 推送入口
+- **Method**：POST `/device-sync`
+- **请求体**：
+  ```json
+  {
+    "projectCode": 12,
+    "gatewayMac": "00-11-22-33-44-55",
+    "gatewayIp": "192.168.0.10",
+    "scannedAt": "2025-10-18T02:05:32Z",
+    "devices": [
+      {
+        "mac": "00-11-32-AA-BB-CC",
+        "name": "塔吊摄像机",
+        "type": "Camera",
+        "model": "IPC123",
+        "ip": "10.0.1.1",
+        "statuses": ["online", "signal-weak"],
+        "latencyMs": 42,
+        "packetLoss": 0.3
+      }
+    ]
+  }
+  ```
+  - `projectCode`：项目通信 ID（0-255），来自项目管理界面的“通信 ID”。
+- `gatewayMac`：现场 NanoPi2 网关 MAC，用作绑定校验；`gatewayIp` 为当前网关 IP，便于排查。
+   - `scannedAt`：网关采样时间；缺省时后端使用当前时间。
+  - `devices`：设备列表；`mac` 为物理网卡地址（必填，作为唯一标识）。网关保证每条记录均携带有效 `mac`，不存在缺失情况。`statuses` 为状态标签数组，第一项视为主状态，其余作为附加标签。
+- 额外指标（可选）：
+  - `latencyMs`：往返延迟毫秒数（Number）。
+  - `packetLoss`：丢包率百分比（0-100 的 Number 或 0-1 小数）。
+  - 其它指标（如 RSSI、电压）可放入 `metrics` 对象，由后端原样入库。
+- **成功响应** `200 OK`：
+  ```json
+  {
+    "processed": 8,
+    "failed": [
+      { "deviceId": "d-009", "reason": "project not found" }
+    ]
+  }
+  ```
+
+### 6.2 服务端处理
+1. 通过 `projectCode` 查询 `ProjectEntity.code`，找不到则记日志并将该设备列入 `failed`。
+2. 对每个设备：
+   - 使用 `(projectId, mac)` 去重匹配；网关保证提供唯一且稳定的 `mac`，不再退回使用其它字段。
+   - `type`、`model` 在同一 `mac` 上视为稳定属性，如发生变化视为设备替换：更新前记录历史值并写入 `activity_log`（action=`device.model_changed`），便于审计。
+   - 调用 `devicesService.registerOrUpdate` 更新字段：`name/type/model/ip/status`、`lastSeenAt`，并存储 `gatewayMac`、`gatewayIp` 及采样时间。
+   - `statuses[0]` 写入主状态（白名单：`online|offline|warning|unknown`），多余标签存入 `metadata.extraStatuses`。
+   - 将延迟/丢包等指标记录到 `metadata.metrics`，并同步更新时间戳、网关信息：
+     ```json
+    {
+      "extraStatuses": ["signal-weak"],
+      "metrics": { "latencyMs": 42, "packetLoss": 0.3 },
+      "gatewayMac": "00-11-22-33-44-55",
+      "gatewayIp": "192.168.0.10",
+      "scannedAt": "2025-10-18T02:05:32Z"
+    }
+     ```
+3. 每台设备成功后调用 `realtimeService.emitDeviceUpdate`，前端未布局列表即时刷新；同步标记本次快照中出现过的设备 ID。
+4. 快照处理结束后，对未出现在本次快照中的设备，将其状态置为 `offline` 并同样广播（可配置是否立即下线或保留一定阈值）。
+4. 可选：写入 `activity_log`，action=`device.sync`，便于审计。
+
+### 6.3 错误处理
+- 项目不存在：记录 `warn` 并回传 `failed` 列表。
+- 单条设备写库失败：捕获异常后继续处理剩余设备，最终一次性返回处理结果。
+
+### 6.4 后续增强（计划）
+- 接入平台签名校验、频率控制。
+- 引入失败队列（BullMQ）与重试。
+- 暴露同步日志查询接口（如 `/device-sync/logs`）。
 
 ---
 
