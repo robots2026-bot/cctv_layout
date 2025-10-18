@@ -43,6 +43,8 @@ interface CanvasState {
   viewport: CanvasViewport;
   gridSize: number;
   isLocked: boolean;
+  isDirty: boolean;
+  lastSavedAt?: number;
   setViewport: (viewport: Partial<CanvasViewport>) => void;
   setBackground: (background: CanvasBackground | null) => void;
   setBlueprint: (blueprint: CanvasBlueprint | null) => void;
@@ -69,6 +71,8 @@ interface CanvasState {
   setLocked: (locked: boolean) => void;
   toggleLocked: () => void;
   focusAllElements: () => void;
+  markDirty: () => void;
+  markSaved: () => void;
 }
 
 const defaultViewport: CanvasViewport = {
@@ -233,6 +237,8 @@ export const useCanvasStore = create<CanvasState>()(
     gridSize: 48,
     viewport: defaultViewport,
     isLocked: true,
+    isDirty: false,
+    lastSavedAt: undefined,
     setViewport: (viewport) =>
       set((state) => ({
         viewport: {
@@ -248,8 +254,8 @@ export const useCanvasStore = create<CanvasState>()(
               : state.viewport.position
         }
       })),
-    setBackground: (background) => set({ background }),
-    setBlueprint: (blueprint) => set({ blueprint }),
+    setBackground: (background) => set({ background, isDirty: true }),
+    setBlueprint: (blueprint) => set({ blueprint, isDirty: true }),
     updateBlueprint: (patch) =>
       set((state) => {
         if (!state.blueprint) {
@@ -267,12 +273,29 @@ export const useCanvasStore = create<CanvasState>()(
           ...patch,
           offset: nextOffset
         };
-        return { blueprint: nextBlueprint };
+        return { blueprint: nextBlueprint, isDirty: true };
       }),
-    setCanvasData: (layout) =>
+    setCanvasData: (layout) => {
       set({
-        elements: layout.elements.map((element) => ({ ...element, selected: false })),
-        connections: layout.connections,
+        elements: layout.elements
+          .filter((item): item is CanvasElement => Boolean(item) && !Array.isArray(item))
+          .map((element) => ({
+            ...element,
+            metadata: element.metadata ?? {},
+            position: element.position ?? { x: 0, y: 0 },
+            size: element.size ?? { width: 150, height: 70 },
+            selected: false
+          })),
+        connections: layout.connections
+          .filter((item): item is CanvasConnection => Boolean(item) && !Array.isArray(item))
+          .map((connection) => ({
+            ...connection,
+            from: connection.from ?? { x: 0, y: 0 },
+            to: connection.to ?? { x: 0, y: 0 },
+            bandwidth: connection.bandwidth ?? {},
+            status: connection.status ?? 'online',
+            selected: false
+          })),
         background: layout.background ? { url: layout.background.url } : null,
         blueprint: layout.blueprint ?? null,
         selectedElement: null,
@@ -281,9 +304,13 @@ export const useCanvasStore = create<CanvasState>()(
         contextMenu: null,
         linking: { active: false, fromElementId: null, pointer: null },
         mode: 'view',
-        isLocked: true
-      }),
-    addDeviceToCanvas: (device, position) =>
+        isLocked: true,
+        isDirty: false,
+        lastSavedAt: Date.now()
+      });
+      useRealtimeStore.getState().syncWithPlacedDevices();
+    },
+    addDeviceToCanvas: (device, position) => {
       set((state) => {
         const newElement: CanvasElement = {
           id: nanoid(),
@@ -306,9 +333,12 @@ export const useCanvasStore = create<CanvasState>()(
           selectedConnectionId: null,
           hoveredElementId: newElement.id,
           contextMenu: null,
-          linking: { active: false, fromElementId: null, pointer: null }
+          linking: { active: false, fromElementId: null, pointer: null },
+          isDirty: true
         };
-      }),
+      });
+      useRealtimeStore.getState().syncWithPlacedDevices();
+    },
     selectElement: (elementId) =>
       set((state) => {
         const nextElements = state.elements.map((element) => ({
@@ -382,7 +412,8 @@ export const useCanvasStore = create<CanvasState>()(
           selectedElement:
             state.selectedElement?.id === elementId
               ? { ...state.selectedElement, position }
-              : state.selectedElement
+              : state.selectedElement,
+          isDirty: true
         };
       }),
     updateElementMetadata: (elementId, updates) =>
@@ -409,7 +440,8 @@ export const useCanvasStore = create<CanvasState>()(
                   ...updates.metadata
                 }
             }
-          : state.selectedElement
+          : state.selectedElement,
+        isDirty: true
       })),
     setHoveredElement: (elementId) =>
       set(() => ({
@@ -543,7 +575,8 @@ export const useCanvasStore = create<CanvasState>()(
           : state.linking;
         return {
           connections: state.connections.concat(newConnection),
-          linking: nextLinking
+          linking: nextLinking,
+          isDirty: true
         };
       }),
     completeLinking: (elementId) =>
@@ -603,7 +636,8 @@ export const useCanvasStore = create<CanvasState>()(
         };
         return {
           connections: state.connections.concat(newConnection),
-          linking: { active: true, fromElementId: null, pointer: null }
+          linking: { active: true, fromElementId: null, pointer: null },
+          isDirty: true
         };
       }),
     removeConnection: (connectionId) =>
@@ -611,9 +645,10 @@ export const useCanvasStore = create<CanvasState>()(
         connections: state.connections.filter((connection) => connection.id !== connectionId),
         selectedConnectionId:
           state.selectedConnectionId === connectionId ? null : state.selectedConnectionId,
-        contextMenu: null
+        contextMenu: null,
+        isDirty: true
       })),
-    removeElement: (elementId) =>
+    removeElement: (elementId) => {
       set((state) => {
         const target = state.elements.find((element) => element.id === elementId);
         const targetKeys = target
@@ -647,9 +682,12 @@ export const useCanvasStore = create<CanvasState>()(
           selectedConnectionId: null,
           hoveredElementId: state.hoveredElementId === elementId ? null : state.hoveredElementId,
           contextMenu: null,
-          linking: { active: false, fromElementId: null, pointer: null }
+          linking: { active: false, fromElementId: null, pointer: null },
+          isDirty: true
         };
-      }),
+      });
+      useRealtimeStore.getState().syncWithPlacedDevices();
+    },
     resetCanvas: () =>
       set({
         elements: [],
@@ -662,7 +700,9 @@ export const useCanvasStore = create<CanvasState>()(
         blueprint: null,
         viewport: defaultViewport,
         mode: 'view',
-        isLocked: true
+        isLocked: true,
+        isDirty: false,
+        lastSavedAt: Date.now()
       }),
     setLocked: (locked) => set({ isLocked: locked }),
     toggleLocked: () =>
@@ -712,6 +752,8 @@ export const useCanvasStore = create<CanvasState>()(
             position
           }
         };
-      })
+      }),
+    markDirty: () => set({ isDirty: true }),
+    markSaved: () => set({ isDirty: false, lastSavedAt: Date.now() })
   }))
 );

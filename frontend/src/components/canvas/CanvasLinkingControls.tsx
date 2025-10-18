@@ -1,5 +1,6 @@
 import {
   ArrowsPointingOutIcon,
+  CloudArrowUpIcon,
   LockClosedIcon,
   LockOpenIcon,
   MagnifyingGlassPlusIcon
@@ -7,6 +8,8 @@ import {
 import { useCanvasStore } from '../../stores/canvasStore';
 import type { CanvasMode } from '../../stores/canvasStore';
 import { BlueprintControlsBar } from '../blueprint/BlueprintControlsBar';
+import { useLayoutStore } from '../../stores/layoutStore';
+import { useUIStore } from '../../stores/uiStore';
 
 export const CanvasLinkingControls = () => {
   const {
@@ -21,7 +24,8 @@ export const CanvasLinkingControls = () => {
     setLocked,
     toggleLocked,
     focusAllElements,
-    elements
+    elements,
+    isDirty
   } = useCanvasStore((state) => ({
     mode: state.mode,
     setMode: state.setMode,
@@ -34,8 +38,14 @@ export const CanvasLinkingControls = () => {
     setLocked: state.setLocked,
     toggleLocked: state.toggleLocked,
     focusAllElements: state.focusAllElements,
-    elements: state.elements
+    elements: state.elements,
+    isDirty: state.isDirty
   }));
+  const { saveLayout, isSaving } = useLayoutStore((state) => ({
+    saveLayout: state.saveLayout,
+    isSaving: state.isSaving
+  }));
+  const addNotification = useUIStore((state) => state.addNotification);
   const formattedScale = viewportScale.toFixed(viewportScale >= 1 ? 1 : 2);
 
   const handleModeChange = (nextMode: CanvasMode) => {
@@ -47,6 +57,14 @@ export const CanvasLinkingControls = () => {
     }
     if (mode === 'view' && nextMode !== 'view') {
       setLocked(true);
+    }
+    if (nextMode === 'view' && mode !== 'view' && isDirty) {
+      addNotification({
+        id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+        title: '有未保存的布局更新',
+        message: '请点击右侧“保存布局”按钮，以免丢失最新更改。',
+        level: 'warning'
+      });
     }
     setMode(nextMode);
   };
@@ -81,6 +99,20 @@ export const CanvasLinkingControls = () => {
     }`;
 
   const showConnectionDeletion = mode === 'linking' && Boolean(selectedConnectionId);
+
+  const handleSave = async () => {
+    try {
+      await saveLayout();
+    } catch (error) {
+      console.error('保存布局失败', error);
+    }
+  };
+
+  const saveButtonClassName = `relative flex items-center gap-1 rounded-md border px-3 py-1 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-sky-400/60 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60 ${
+    isDirty ? 'border-sky-500/70 bg-sky-500/20 text-sky-100 hover:bg-sky-500/30' : 'border-slate-700/80 bg-slate-800/70 text-slate-300 hover:bg-slate-700/70'
+  }`;
+
+  const isSaveVisible = mode === 'layout' || mode === 'linking' || mode === 'blueprint';
 
   return (
     <div className="pointer-events-none absolute left-6 top-6 z-30 flex flex-wrap items-center gap-3">
@@ -130,19 +162,33 @@ export const CanvasLinkingControls = () => {
             <span>显示全部</span>
           </button>
         </div>
-        {mode !== 'view' && (
-          <button
-            type="button"
-            onClick={toggleLocked}
-            className={`flex items-center gap-1 rounded-md border px-3 py-1 text-[11px] transition focus:outline-none focus:ring-2 focus:ring-sky-400/60 focus:ring-offset-2 focus:ring-offset-slate-900 ${
-              isLocked
-                ? 'border-slate-700/80 bg-slate-800/70 text-slate-200 hover:bg-slate-700/70'
-                : 'border-emerald-500/70 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30'
-            }`}
-          >
-            {isLocked ? <LockClosedIcon className="h-4 w-4" /> : <LockOpenIcon className="h-4 w-4" />}
-            <span>{isLocked ? '已锁定' : '可编辑'}</span>
-          </button>
+        {isSaveVisible && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleLocked}
+              className={`flex items-center gap-1 rounded-md border px-3 py-1 text-[11px] transition focus:outline-none focus:ring-2 focus:ring-sky-400/60 focus:ring-offset-2 focus:ring-offset-slate-900 ${
+                isLocked
+                  ? 'border-slate-700/80 bg-slate-800/70 text-slate-200 hover:bg-slate-700/70'
+                  : 'border-emerald-500/70 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30'
+              }`}
+            >
+              {isLocked ? <LockClosedIcon className="h-4 w-4" /> : <LockOpenIcon className="h-4 w-4" />}
+              <span>{isLocked ? '已锁定' : '可编辑'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!isDirty || isSaving}
+              className={saveButtonClassName}
+            >
+              <CloudArrowUpIcon className="h-4 w-4" />
+              <span>{isSaving ? '保存中...' : '保存布局'}</span>
+              {isDirty && !isSaving && (
+                <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+              )}
+            </button>
+          </div>
         )}
         {mode === 'blueprint' && <BlueprintControlsBar />}
       </div>

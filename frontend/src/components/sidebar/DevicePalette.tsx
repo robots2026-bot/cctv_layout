@@ -7,7 +7,6 @@ import { DeviceSummary } from '../../types/canvas';
 import { DEVICE_DRAG_DATA_FORMAT } from '../../utils/dragDrop';
 import {
   DeviceCategory,
-  deriveSwitchLabel,
   getDeviceCategory,
   getDeviceTypeVisual,
   getStatusVisual
@@ -20,11 +19,9 @@ interface DevicePaletteProps {
 const DeviceListIcon = ({
   category,
   accent,
-  label
 }: {
   category: DeviceCategory;
   accent: string;
-  label?: string;
 }) => {
   if (category === 'switch') {
     return (
@@ -33,20 +30,14 @@ const DeviceListIcon = ({
           cx="20"
           cy="20"
           r="16"
-          fill="#0f172a"
+          fill="#1e3a8a"
           stroke={accent}
           strokeWidth="2"
         />
-        <text
-          x="20"
-          y="23"
-          textAnchor="middle"
-          fontSize="11"
-          fontFamily="Inter, system-ui, monospace"
-          fill={accent}
-        >
-          {deriveSwitchLabel(label)}
-        </text>
+        <rect x="11" y="17" width="18" height="6" rx="2" fill={accent} />
+        <rect x="13" y="18" width="3" height="4" fill="#0b1f38" />
+        <rect x="18.5" y="18" width="3" height="4" fill="#0b1f38" />
+        <rect x="24" y="18" width="3" height="4" fill="#0b1f38" />
       </svg>
     );
   }
@@ -231,15 +222,13 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
                   onDragStart={(event) => handleDragStart(event, device)}
                   className="flex w-full cursor-grab items-center gap-2 rounded border px-2 py-2 text-left transition hover:ring-2 hover:ring-slate-100/60 active:cursor-grabbing"
                   style={{
-                    backgroundColor: status.nodeFill,
-                    borderColor: status.fill
+                    backgroundColor:
+                      category === 'switch' ? '#1e3a8a' : status.nodeFill,
+                    borderColor:
+                      category === 'switch' ? '#38bdf8' : status.fill
                   }}
                 >
-                  <DeviceListIcon
-                    category={category}
-                    accent={status.textColor}
-                    label={device.model ?? device.name}
-                  />
+                  <DeviceListIcon category={category} accent={status.textColor} />
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <div className="flex items-start justify-between gap-2">
                       <span
@@ -251,9 +240,18 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
                       <span
                         className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
                         style={{
-                          borderColor: typeVisual.accent,
-                          color: typeVisual.text,
-                          backgroundColor: typeVisual.background
+                          borderColor:
+                            category === 'switch'
+                              ? '#38bdf8'
+                              : typeVisual.accent,
+                          color:
+                            category === 'switch'
+                              ? '#dbeafe'
+                              : typeVisual.text,
+                          backgroundColor:
+                            category === 'switch'
+                              ? 'rgba(59, 130, 246, 0.2)'
+                              : typeVisual.background
                         }}
                       >
                         {typeVisual.label}

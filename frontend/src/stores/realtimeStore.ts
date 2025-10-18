@@ -31,6 +31,7 @@ interface RealtimeState {
   handleEvent: (message: RealtimeEvent) => void;
   consumeDevice: (deviceId: string) => void;
   restoreDevice: (device: DeviceSummary) => void;
+  syncWithPlacedDevices: () => void;
 }
 
 let socket: Socket | null = null;
@@ -163,6 +164,21 @@ export const useRealtimeStore = create<RealtimeState>()(
         return {
           availableDevices: [...state.availableDevices, device]
         };
+      });
+    },
+    syncWithPlacedDevices: () => {
+      set((state) => {
+        const placedIds = new Set(
+          useCanvasStore
+            .getState()
+            .elements.map((element) => element.deviceId)
+            .filter(Boolean) as string[]
+        );
+        const filtered = state.availableDevices.filter((device) => !placedIds.has(device.id));
+        if (filtered.length === state.availableDevices.length) {
+          return state.availableDevices === filtered ? {} : { availableDevices: filtered };
+        }
+        return { availableDevices: filtered };
       });
     },
     handleEvent: (message: RealtimeEvent) => {

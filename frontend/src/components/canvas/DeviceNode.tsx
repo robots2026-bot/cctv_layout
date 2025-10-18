@@ -36,9 +36,12 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
 
   const statusConfig = getStatusVisual(element.metadata?.status as string | undefined);
   const category = getDeviceCategory(element.type);
+  const width = element.size?.width ?? 150;
+  const height = element.size?.height ?? 70;
+  const position = element.position ?? { x: 0, y: 0 };
 
   const textOffsetX = category === 'switch' ? 0 : 56;
-  const textWidth = category === 'switch' ? element.size.width : Math.max(80, element.size.width - textOffsetX - 12);
+  const textWidth = category === 'switch' ? width : Math.max(80, width - textOffsetX - 12);
 
   const renderTypeIcon = () => {
     const accent = isHovered ? '#f8fafc' : '#e2e8f0';
@@ -66,8 +69,8 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
 
   return (
     <Group
-      x={element.position.x}
-      y={element.position.y}
+      x={position.x}
+      y={position.y}
       draggable={mode === 'layout' && !linking.active && !isBlueprintEditing && !isLocked}
       listening={!isBlueprintEditing}
       onDragMove={(event) => {
@@ -159,15 +162,15 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
       {category === 'switch' ? (
         <>
           {(() => {
-            const baseRadius = Math.min(element.size.width, element.size.height) / 2;
-            const fillColor = '#2563eb';
+            const baseRadius = Math.min(width, height) / 2;
+            const fillColor = '#1e3a8a';
             const strokeColor = linking.active && linking.fromElementId === element.id ? '#38bdf8' : isHovered ? '#93c5fd' : '#1d4ed8';
             const label = element.name?.trim() || deriveSwitchLabel((element.metadata?.model as string | undefined) || 'Switch');
             return (
               <>
                 <Circle
-                  x={element.size.width / 2}
-                  y={element.size.height / 2}
+                  x={width / 2}
+                  y={height / 2}
                   radius={baseRadius}
                   fill={fillColor}
                   stroke={strokeColor}
@@ -179,8 +182,8 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
                   fontStyle="bold"
                   fill="#f8fafc"
                   x={0}
-                  y={element.size.height / 2 - 10}
-                  width={element.size.width}
+                  y={height / 2 - 10}
+                  width={width}
                   align="center"
                   wrap="none"
                   ellipsis
@@ -192,8 +195,8 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
       ) : (
         <>
           <Rect
-            width={element.size.width}
-            height={element.size.height}
+            width={width}
+            height={height}
             cornerRadius={6}
             fill={statusConfig.nodeFill}
             stroke={linking.active && linking.fromElementId === element.id ? '#38bdf8' : isHovered ? '#f8fafc' : '#0b1120'}
