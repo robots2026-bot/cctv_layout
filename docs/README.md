@@ -11,6 +11,7 @@
 - [backend/device-sync.md](backend/device-sync.md)：NanoPi2 网关采集与设备同步方案。
 - [backend/websocket.md](backend/websocket.md)：实时通道事件与订阅规则。
 - [backend/data-model.md](backend/data-model.md)：数据库/实体示例与字段说明。
+- [backend/object-storage.md](backend/object-storage.md)：对象存储接入与文件服务方案。
 - [backend/ops/deployment.md](backend/ops/deployment.md)：本地与服务器部署流程、Docker 工作流。
 
 ## 前端（Frontend）

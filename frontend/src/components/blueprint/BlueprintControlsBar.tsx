@@ -2,14 +2,18 @@ import { ChangeEvent, useRef } from 'react';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { useUIStore } from '../../stores/uiStore';
 import { nanoid } from '../../utils/nanoid';
+import { useLayoutStore } from '../../stores/layoutStore';
+import { uploadBlueprintFile } from '../../services/fileUploads';
 
-const loadImageDimensions = (url: string) =>
-  new Promise<{ width: number; height: number }>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve({ width: image.width, height: image.height });
-    image.onerror = (event) => reject(event);
-    image.src = url;
-  });
+const formatBytes = (bytes: number) => {
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  }
+  if (bytes >= 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${bytes} B`;
+};
 
 export const BlueprintControlsBar = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -22,6 +26,7 @@ export const BlueprintControlsBar = () => {
   const { addNotification } = useUIStore((state) => ({
     addNotification: state.addNotification
   }));
+  const layout = useLayoutStore((state) => state.layout);
 
   const hasBlueprint = Boolean(blueprint);
 
@@ -51,32 +56,45 @@ export const BlueprintControlsBar = () => {
       return;
     }
 
-    const limitBytes = 10 * 1024 * 1024;
-    if (file.size > limitBytes) {
-      notify('文件过大', '图纸大小需小于 10MB', 'error');
+    if (!layout) {
+      notify('无法上传蓝图', '请先加载布局后再尝试导入蓝图', 'error');
       resetFileInput();
       return;
     }
 
-    const objectUrl = URL.createObjectURL(file);
+    const limitBytes = 20 * 1024 * 1024;
+    if (file.size > limitBytes) {
+      notify('文件过大', '图纸大小需小于 20MB', 'error');
+      resetFileInput();
+      return;
+    }
+
     try {
-      const { width, height } = await loadImageDimensions(objectUrl);
-      const previousUrl = blueprint?.url;
+      notify('蓝图上传中', `正在上传图纸 "${file.name}"，请稍候…`, 'info');
+      const uploadResult = await uploadBlueprintFile(file, {
+        projectId: layout.projectId,
+        layoutId: layout.id
+      });
+      const width = uploadResult.width ?? uploadResult.dimensions.width;
+      const height = uploadResult.height ?? uploadResult.dimensions.height;
+      const sizeBytes = uploadResult.sizeBytes ?? file.size;
       setBlueprint({
-        url: objectUrl,
+        url: uploadResult.url,
         naturalWidth: width,
         naturalHeight: height,
         scale: 1,
         opacity: 0.6,
-        offset: { x: 0, y: 0 }
+        offset: { x: 0, y: 0 },
+        fileId: uploadResult.id
       });
-      if (previousUrl && previousUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(previousUrl);
-      }
-      notify('蓝图已导入', `图纸 "${file.name}" 已添加到画布`, 'info');
+      notify(
+        '蓝图已导入',
+        `图纸 "${file.name}" 已上传，尺寸 ${width}×${height}，约 ${formatBytes(sizeBytes)}`,
+        'info'
+      );
     } catch (error) {
-      URL.revokeObjectURL(objectUrl);
-      notify('图纸加载失败', '无法读取图片尺寸，请重试或更换文件', 'error');
+      const message = error instanceof Error ? error.message : '无法读取图片尺寸，请重试或更换文件';
+      notify('图纸加载失败', message, 'error');
     } finally {
       resetFileInput();
     }
@@ -107,9 +125,6 @@ export const BlueprintControlsBar = () => {
     }
     if (!window.confirm('确认移除当前蓝图吗？此操作不可撤销。')) {
       return;
-    }
-    if (blueprint.url.startsWith('blob:')) {
-      URL.revokeObjectURL(blueprint.url);
     }
     setBlueprint(null);
     notify('蓝图已移除', '已清除画布蓝图图层', 'warning');

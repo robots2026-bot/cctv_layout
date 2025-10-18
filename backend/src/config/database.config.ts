@@ -7,6 +7,7 @@ import { LayoutVersionEntity } from '../modules/layouts/entities/layout-version.
 import { UserEntity } from '../modules/auth/entities/user.entity';
 import { ActivityLogEntity } from '../modules/activity-log/entities/activity-log.entity';
 import { ProjectMemberEntity } from '../modules/projects/entities/project-member.entity';
+import { ProjectFileEntity } from '../modules/files/entities/project-file.entity';
 
 export default registerAs('database', (): TypeOrmModuleOptions => ({
   type: 'postgres',
@@ -24,7 +25,8 @@ export default registerAs('database', (): TypeOrmModuleOptions => ({
     LayoutEntity,
     LayoutVersionEntity,
     UserEntity,
-    ActivityLogEntity
+    ActivityLogEntity,
+    ProjectFileEntity
   ],
   migrations: ['dist/database/migrations/*.js'],
   migrationsRun: false,

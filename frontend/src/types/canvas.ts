@@ -51,6 +51,7 @@ export interface CanvasBlueprint {
   scale: number;
   opacity: number;
   offset: { x: number; y: number };
+  fileId?: string | null;
 }
 
 export interface CanvasLayout {

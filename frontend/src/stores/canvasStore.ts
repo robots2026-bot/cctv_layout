@@ -280,6 +280,13 @@ export const useCanvasStore = create<CanvasState>()(
         if (!raw || typeof raw !== 'object') return null;
         const blueprint = raw as Record<string, unknown>;
         const url = typeof blueprint.url === 'string' ? blueprint.url : null;
+        const imageSource =
+          url && url.startsWith('blob:')
+            ? useCanvasStore.getState().blueprint?.url
+            : url;
+        if (!imageSource) {
+          return null;
+        }
         if (!url) return null;
         const naturalWidth = typeof blueprint.naturalWidth === 'number' ? blueprint.naturalWidth : 0;
         const naturalHeight = typeof blueprint.naturalHeight === 'number' ? blueprint.naturalHeight : 0;
@@ -289,12 +296,13 @@ export const useCanvasStore = create<CanvasState>()(
         const offsetX = typeof offsetSource?.x === 'number' ? offsetSource.x : 0;
         const offsetY = typeof offsetSource?.y === 'number' ? offsetSource.y : 0;
         return {
-          url,
+          url: imageSource,
           naturalWidth,
           naturalHeight,
           scale,
           opacity,
-          offset: { x: offsetX, y: offsetY }
+          offset: { x: offsetX, y: offsetY },
+          fileId: typeof blueprint.fileId === 'string' ? blueprint.fileId : undefined
         };
       };
 

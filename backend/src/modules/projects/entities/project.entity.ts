@@ -11,6 +11,7 @@ import { LayoutEntity } from '../../layouts/entities/layout.entity';
 import { DeviceEntity } from '../../devices/entities/device.entity';
 import { ActivityLogEntity } from '../../activity-log/entities/activity-log.entity';
 import { ProjectMemberEntity } from './project-member.entity';
+import { ProjectFileEntity } from '../../files/entities/project-file.entity';
 
 export enum ProjectStage {
   PLANNING = 'planning',
@@ -93,6 +94,9 @@ export class ProjectEntity {
 
   @OneToMany(() => ProjectMemberEntity, (member) => member.project)
   members!: ProjectMemberEntity[];
+
+  @OneToMany(() => ProjectFileEntity, (file) => file.project)
+  files!: ProjectFileEntity[];
 
   layoutCount?: number;
   deviceCount?: number;

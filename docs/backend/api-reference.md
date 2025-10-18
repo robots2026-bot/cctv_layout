@@ -136,6 +136,7 @@
     "projectId": "uuid",
     "background": { "url": "https://..." }, // 可为空
     "blueprint": {
+      "fileId": "file-uuid",
       "url": "https://...",
       "naturalWidth": 2480,
       "naturalHeight": 3508,
@@ -157,7 +158,76 @@
 - **响应** `200 OK`：返回最新 `CanvasLayout` 与 `versionId`。
 - **备注**：保存时需生成版本快照，并通过实时通道广播。
 
-## 3. 设备资源接口（Devices）
+## 3. 文件服务（Files）
+
+### 3.1 获取预签名上传地址
+- **Method**：POST `/projects/:projectId/files/presign`
+- **请求体**：
+  ```json
+  {
+    "fileName": "blueprint-A1.png",
+    "mimeType": "image/png",
+    "sizeBytes": 7340032,
+    "category": "blueprint",
+    "layoutId": "layout-uuid" // 可选
+  }
+  ```
+  - `category`：`blueprint|background|export|other`，服务端将根据类型限制最大体积（蓝图 20MB、背景图 15MB、导出 50MB、其他 10MB）。
+  - 若传入 `layoutId`，后端会校验该布局隶属于当前项目。
+- **响应** `200 OK`：
+  ```json
+  {
+    "fileId": "file-uuid",
+    "uploadUrl": "https://<object-storage>/...",
+    "expiresIn": 900,
+    "headers": {
+      "Content-Type": "image/png"
+    },
+    "objectKey": "dev/<project>/<category>/..."
+  }
+  ```
+  前端使用返回的 `uploadUrl` 执行浏览器直传（PUT 请求），并保留 `fileId` 便于后续绑定布局。
+
+### 3.2 完成上传
+- **Method**：POST `/projects/:projectId/files/:fileId/complete`
+- **请求体**：
+  ```json
+  {
+    "sizeBytes": 7340032,
+    "width": 2480,
+    "height": 3508,
+    "etag": "19d0e8f6..." // 可选，S3/MinIO 响应头中的 ETag
+  }
+  ```
+- **响应** `200 OK`：
+  ```json
+  {
+    "id": "file-uuid",
+    "projectId": "uuid",
+    "layoutId": "layout-uuid",
+    "category": "blueprint",
+    "url": "https://storage.local/cctv-layout-assets/dev/...",
+    "objectKey": "dev/...",
+    "mimeType": "image/png",
+    "sizeBytes": 7340032,
+    "width": 2480,
+    "height": 3508,
+    "status": "available"
+  }
+  ```
+  - 若 `OBJECT_STORAGE_PUBLIC_BASE_URL` 未配置，后端会返回临时签名下载链接（有效期与 `expiresIn` 一致）。
+  - 返回的 `url` 写入布局 `metadata.blueprint.url`，并同步记录 `fileId` 以便后续刷新。
+
+### 3.3 查询文件元数据
+- **Method**：GET `/projects/:projectId/files/:fileId`
+- **响应** `200 OK`：结构同 3.2 响应。
+
+### 3.4 删除文件
+- **Method**：DELETE `/projects/:projectId/files/:fileId`
+- **响应** `200 OK`：`{ "success": true }`
+- **说明**：标记文件为 `deleted` 并从对象存储移除。当前布局版本仍引用的文件不建议直接删除。
+
+## 4. 设备资源接口（Devices）
 
 ### 3.1 查询待布局设备
 - **Method**：GET `/projects/:projectId/devices`
@@ -205,13 +275,13 @@
   - 若 IP 已存在同项目，执行幂等更新。
   - 保存后应通过实时通道 `device.update` 推送。
 
-## 4. 实时通道（Socket.IO）
+## 5. 实时通道（Socket.IO）
 
 - **连接地址**：`ws(s)://<host>:<port>`，`path = /realtime`。
 - **鉴权**：推荐通过 `auth: { token }` 或 `query.token` 传递，同步校验。
 - **房间管理**：后端需支持订阅 `project:<projectId>`，以便按项目推送事件。
 
-### 4.1 服务器向客户端事件
+### 5.1 服务器向客户端事件
 | 事件名 | 触发场景 | Payload |
 |--------|----------|---------|
 | `device.update` | 设备状态/属性变更（注册、去重、心跳更新） | `{ id, name, type, model, ip, status }` |
@@ -219,26 +289,26 @@
 | `projects.updated` | 项目增删改、恢复 | `{ projectId, action: "created" \| "updated" \| "archived" \| "deleted" \| "restored" }` |
 | `layout.version` | 布局保存生成新版本 | `{ layoutId, versionId }` |
 
-### 4.3 设备同步事件（后续扩展）
+### 5.2 设备同步事件（后续扩展）
 - 当前版本仅依赖 `device.update` 推送。
 - 若平台后续直接触发实时消息，可采用 `device.synced`，Payload 与 `device.update` 保持一致。
 
-### 4.2 客户端建议的订阅流程
+### 5.3 客户端建议的订阅流程
 1. 连接后发送 `socket.emit('project.join', { projectId })`（待后端实现），加入项目房间。
 2. 在路由切换时调用 `project.leave` 退出旧项目，避免冗余推送。
 3. 前端在 `device.update` 后根据 `device.id` 决定更新未布局列表或忽略（画布上已使用的设备不再加入列表）。
 
-## 5. 变更流程要求
+## 6. 变更流程要求
 
 - 新增或调整接口前，必须在本文件中更新对应章节，并标记版本号/日期。
 - 前后端需以此文档为准完成联调，未经记录的接口视为未对齐。
 - 重要字段或响应格式变化需同步评估：数据库迁移、权限策略、实时推送影响。
 
-## 6. 设备同步接口（Platform → Backend）
+## 7. 设备同步接口（Platform → Backend）
 
 平台通过部署在工地现场的 NanoPi2 网关周期性采集设备信息（在线状态、IP、延迟、类型、型号等），并通过 HTTP 推送到后端。每次推送视为“当前工地设备的完整快照”，后端需用最新数据覆盖旧状态，并刷新画布 / 未布局列表。本阶段接口仅做核心字段校验，不做鉴权。详细同步流程见 [device-sync.md](./device-sync.md)。
 
-### 6.1 推送入口
+### 7.1 推送入口
 - **Method**：POST `/device-sync`
 - **请求体**：
   ```json
@@ -279,7 +349,7 @@
   }
   ```
 
-### 6.2 服务端处理
+### 7.2 服务端处理
 1. 通过 `projectCode` 查询 `ProjectEntity.code`，找不到则记日志并将该设备列入 `failed`。
 2. 对每个设备：
    - 使用 `(projectId, mac)` 去重匹配；网关保证提供唯一且稳定的 `mac`，不再退回使用其它字段。
@@ -300,15 +370,15 @@
 4. 快照处理结束后，对未出现在本次快照中的设备，将其状态置为 `offline` 并同样广播（可配置是否立即下线或保留一定阈值）。
 4. 可选：写入 `activity_log`，action=`device.sync`，便于审计。
 
-### 6.3 错误处理
+### 7.3 错误处理
 - 项目不存在：记录 `warn` 并回传 `failed` 列表。
 - 单条设备写库失败：捕获异常后继续处理剩余设备，最终一次性返回处理结果。
 
-### 6.4 后续增强（计划）
+### 7.4 后续增强（计划）
 - 接入平台签名校验、频率控制。
 - 引入失败队列（BullMQ）与重试。
 - 暴露同步日志查询接口（如 `/device-sync/logs`）。
 
 ---
 
-最近更新时间：2025-10-16
+最近更新时间：2025-10-18

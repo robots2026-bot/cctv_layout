@@ -66,14 +66,17 @@ export const useLayoutStore = create<LayoutState>()(
       });
 
       const serializeBlueprint = (blueprint: typeof canvasState.blueprint) => {
-        if (!blueprint) return null;
+        if (!blueprint || typeof blueprint.url !== 'string' || !blueprint.url) {
+          return null;
+        }
         return {
           url: blueprint.url,
           naturalWidth: blueprint.naturalWidth,
           naturalHeight: blueprint.naturalHeight,
           scale: blueprint.scale,
           opacity: blueprint.opacity,
-          offset: { ...blueprint.offset }
+          offset: { ...blueprint.offset },
+          fileId: blueprint.fileId ?? null
         };
       };
 

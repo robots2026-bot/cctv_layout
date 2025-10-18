@@ -7,9 +7,15 @@ import { LayoutsController } from './layouts.controller';
 import { ActivityLogModule } from '../activity-log/activity-log.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { ProjectEntity } from '../projects/entities/project.entity';
+import { FilesModule } from '../files/files.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([LayoutEntity, LayoutVersionEntity, ProjectEntity]), ActivityLogModule, RealtimeModule],
+  imports: [
+    TypeOrmModule.forFeature([LayoutEntity, LayoutVersionEntity, ProjectEntity]),
+    ActivityLogModule,
+    RealtimeModule,
+    FilesModule
+  ],
   controllers: [LayoutsController],
   providers: [LayoutsService],
   exports: [LayoutsService]

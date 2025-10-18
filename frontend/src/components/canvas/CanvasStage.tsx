@@ -15,14 +15,18 @@ import { DeviceSummary } from '../../types/canvas';
 import { useRealtimeStore } from '../../stores/realtimeStore';
 import { KonvaEventObject } from 'konva/lib/Node';
 import { nanoid } from '../../utils/nanoid';
+import { uploadBlueprintFile } from '../../services/fileUploads';
+import { useLayoutStore } from '../../stores/layoutStore';
 
-const loadImageDimensions = (url: string) =>
-  new Promise<{ width: number; height: number }>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve({ width: image.width, height: image.height });
-    image.onerror = (event) => reject(event);
-    image.src = url;
-  });
+const formatBytes = (bytes: number) => {
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  }
+  if (bytes >= 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${bytes} B`;
+};
 
 export const CanvasStage = () => {
   const stageRef = useRef<KonvaStage | null>(null);
@@ -125,44 +129,64 @@ export const CanvasStage = () => {
           });
           return;
         }
-        const limitBytes = 10 * 1024 * 1024;
+        const layout = useLayoutStore.getState().layout;
+        if (!layout) {
+          addNotification({
+            id: nanoid(),
+            title: '蓝图导入失败',
+            message: '请先加载布局后再导入蓝图',
+            level: 'error'
+          });
+          return;
+        }
+        const limitBytes = 20 * 1024 * 1024;
         if (imageFile.size > limitBytes) {
           addNotification({
             id: nanoid(),
             title: '文件过大',
-            message: '蓝图大小需小于 10MB',
+            message: '蓝图大小需小于 20MB',
             level: 'error'
           });
           return;
         }
 
-        const objectUrl = URL.createObjectURL(imageFile);
         try {
-          const { width, height } = await loadImageDimensions(objectUrl);
-          const previousUrl = store.blueprint?.url;
+          addNotification({
+            id: nanoid(),
+            title: '蓝图上传中',
+            message: `正在上传图纸 "${imageFile.name}"，请稍候…`,
+            level: 'info'
+          });
+          const uploadResult = await uploadBlueprintFile(imageFile, {
+            projectId: layout.projectId,
+            layoutId: layout.id
+          });
+          const width = uploadResult.width ?? uploadResult.dimensions.width;
+          const height = uploadResult.height ?? uploadResult.dimensions.height;
+          const sizeBytes = uploadResult.sizeBytes ?? imageFile.size;
           store.setBlueprint({
-            url: objectUrl,
+            url: uploadResult.url,
             naturalWidth: width,
             naturalHeight: height,
             scale: 1,
             opacity: 0.6,
-            offset: { x: 0, y: 0 }
+            offset: { x: 0, y: 0 },
+            fileId: uploadResult.id
           });
-          if (previousUrl && previousUrl.startsWith('blob:')) {
-            URL.revokeObjectURL(previousUrl);
-          }
           addNotification({
             id: nanoid(),
             title: '蓝图已导入',
-            message: `图纸 "${imageFile.name}" 已添加到画布`,
+            message: `图纸 "${imageFile.name}" 已上传，尺寸 ${width}×${height}，约 ${formatBytes(sizeBytes)}`,
             level: 'info'
           });
         } catch (error) {
-          URL.revokeObjectURL(objectUrl);
           addNotification({
             id: nanoid(),
             title: '图纸加载失败',
-            message: '无法读取图片尺寸，请重试或更换文件',
+            message:
+              error instanceof Error
+                ? error.message
+                : '无法读取图片尺寸，请重试或更换文件',
             level: 'error'
           });
         }

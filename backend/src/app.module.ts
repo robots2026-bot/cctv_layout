@@ -11,12 +11,13 @@ import { AuthModule } from './modules/auth/auth.module';
 import { ActivityLogModule } from './modules/activity-log/activity-log.module';
 import databaseConfig from './config/database.config';
 import appConfig from './config/app.config';
+import objectStorageConfig from './config/object-storage.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig]
+      load: [appConfig, databaseConfig, objectStorageConfig]
     }),
     TypeOrmModule.forRootAsync({
       useFactory: (configService: ConfigService) =>

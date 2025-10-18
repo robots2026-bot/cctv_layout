@@ -20,6 +20,8 @@
     "prestart:debug": "node scripts/ensure-database.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.913.0",
+    "@aws-sdk/s3-request-presigner": "^3.913.0",
     "@nestjs/common": "^10.3.3",
     "@nestjs/config": "^3.1.1",
     "@nestjs/core": "^10.3.3",
@@ -54,6 +56,7 @@
     "@types/node": "^20.11.10",
     "@types/pg": "^8.15.5",
     "@types/supertest": "^2.0.16",
+    "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^7.0.1",
     "@typescript-eslint/parser": "^7.0.1",
     "eslint": "^8.56.0",

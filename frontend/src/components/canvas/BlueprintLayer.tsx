@@ -4,10 +4,11 @@ import { useEffect } from 'react';
 import { useCanvasStore } from '../../stores/canvasStore';
 
 export const BlueprintLayer = () => {
-  const { blueprint, updateBlueprint, mode } = useCanvasStore((state) => ({
+  const { blueprint, updateBlueprint, mode, isLocked } = useCanvasStore((state) => ({
     blueprint: state.blueprint,
     updateBlueprint: state.updateBlueprint,
-    mode: state.mode
+    mode: state.mode,
+    isLocked: state.isLocked
   }));
   const [image, status] = useImage(blueprint?.url ?? '', 'anonymous');
 
@@ -25,7 +26,7 @@ export const BlueprintLayer = () => {
     return null;
   }
 
-  const isEditing = mode === 'blueprint';
+  const isEditing = mode === 'blueprint' && !isLocked;
   const width = image?.width ?? blueprint.naturalWidth;
   const height = image?.height ?? blueprint.naturalHeight;
 

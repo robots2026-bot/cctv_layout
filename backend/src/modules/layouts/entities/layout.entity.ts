@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { ProjectEntity } from '../../projects/entities/project.entity';
 import { LayoutVersionEntity } from './layout-version.entity';
+import { ProjectFileEntity } from '../../files/entities/project-file.entity';
 
 @Entity({ name: 'layouts' })
 export class LayoutEntity {
@@ -34,6 +35,9 @@ export class LayoutEntity {
 
   @OneToMany(() => LayoutVersionEntity, (version) => version.layout)
   versions!: LayoutVersionEntity[];
+
+  @OneToMany(() => ProjectFileEntity, (file) => file.layout)
+  files!: ProjectFileEntity[];
 
   @Column({ name: 'current_version_id', type: 'uuid', nullable: true })
   currentVersionId?: string | null;

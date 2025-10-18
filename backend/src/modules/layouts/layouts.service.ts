@@ -9,6 +9,8 @@ import { SaveLayoutVersionDto } from './dto/save-layout-version.dto';
 import { ActivityLogService } from '../activity-log/activity-log.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { ProjectEntity } from '../projects/entities/project.entity';
+import { FilesService } from '../files/files.service';
+import type { ProjectFileMetadata } from '../files/files.service';
 
 export interface LayoutDetail {
   id: string;
@@ -31,7 +33,8 @@ export class LayoutsService {
     @InjectRepository(ProjectEntity)
     private readonly projectsRepository: Repository<ProjectEntity>,
     private readonly activityLogService: ActivityLogService,
-    private readonly realtimeService: RealtimeService
+    private readonly realtimeService: RealtimeService,
+    private readonly filesService: FilesService
   ) {}
 
   async listProjectLayouts(projectId: string) {
@@ -60,10 +63,28 @@ export class LayoutsService {
       latestVersion?.metadataJson && typeof latestVersion.metadataJson === 'object'
         ? (latestVersion.metadataJson as Record<string, unknown>)
         : null;
-    const blueprint =
-      metadata && typeof metadata.blueprint === 'object'
-        ? (metadata.blueprint as Record<string, unknown>)
-        : null;
+    let blueprint: Record<string, unknown> | null = null;
+    if (metadata && typeof metadata.blueprint === 'object') {
+      blueprint = { ...(metadata.blueprint as Record<string, unknown>) };
+      const fileId = typeof blueprint.fileId === 'string' ? blueprint.fileId : null;
+      if (fileId) {
+        try {
+          const fileMetadata: ProjectFileMetadata = await this.filesService.getFileMetadata(
+            layout.projectId,
+            fileId
+          );
+          blueprint.url = fileMetadata.url;
+          if (!blueprint.naturalWidth && fileMetadata.width) {
+            blueprint.naturalWidth = fileMetadata.width;
+          }
+          if (!blueprint.naturalHeight && fileMetadata.height) {
+            blueprint.naturalHeight = fileMetadata.height;
+          }
+        } catch (error) {
+          blueprint.url = null;
+        }
+      }
+    }
     return {
       id: layout.id,
       projectId: layout.projectId,
