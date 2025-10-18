@@ -69,4 +69,4 @@ docker compose up --build
 - 前端通过 `VITE_API_BASE_URL` 与 `VITE_REALTIME_URL` 环境变量完成跨环境配置。
 - Dockerfile 已分别提供前后端镜像构建示例。
 
-更多架构设计与迭代计划请参阅 [DESIGN_PLAN.md](DESIGN_PLAN.md)。
+更多架构设计与迭代计划请参阅 [DESIGN_PLAN.md](docs/design/design-plan.md)。
