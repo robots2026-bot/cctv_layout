@@ -45,6 +45,7 @@ interface CanvasState {
   isLocked: boolean;
   isDirty: boolean;
   lastSavedAt?: number;
+  lastFocusCenter: { x: number; y: number } | null;
   setViewport: (viewport: Partial<CanvasViewport>) => void;
   setBackground: (background: CanvasBackground | null) => void;
   setBlueprint: (blueprint: CanvasBlueprint | null) => void;
@@ -238,6 +239,7 @@ export const useCanvasStore = create<CanvasState>()(
     viewport: defaultViewport,
     isLocked: true,
     isDirty: false,
+    lastFocusCenter: null,
     lastSavedAt: undefined,
     setViewport: (viewport) =>
       set((state) => ({
@@ -336,7 +338,8 @@ export const useCanvasStore = create<CanvasState>()(
         mode: 'view',
         isLocked: true,
         isDirty: false,
-        lastSavedAt: Date.now()
+        lastSavedAt: Date.now(),
+        lastFocusCenter: null
       });
       useRealtimeStore.getState().syncWithPlacedDevices();
     },
@@ -732,6 +735,7 @@ export const useCanvasStore = create<CanvasState>()(
         mode: 'view',
         isLocked: true,
         isDirty: false,
+        lastFocusCenter: null,
         lastSavedAt: Date.now()
       }),
     setLocked: (locked) => set({ isLocked: locked }),
@@ -741,28 +745,51 @@ export const useCanvasStore = create<CanvasState>()(
       })),
     focusAllElements: () =>
       set((state) => {
-        const { elements, viewport } = state;
+        const { elements, viewport, blueprint } = state;
         if (!viewport.width || !viewport.height) {
           return {};
         }
-        if (elements.length === 0) {
+
+        const bounds: Array<{ minX: number; minY: number; maxX: number; maxY: number }> = [];
+
+        elements.forEach((element) => {
+          bounds.push({
+            minX: element.position.x,
+            minY: element.position.y,
+            maxX: element.position.x + element.size.width,
+            maxY: element.position.y + element.size.height
+          });
+        });
+
+        if (blueprint) {
+          const blueprintWidth = (blueprint.naturalWidth || 0) * (blueprint.scale || 1);
+          const blueprintHeight = (blueprint.naturalHeight || 0) * (blueprint.scale || 1);
+          if (blueprintWidth > 0 && blueprintHeight > 0) {
+            bounds.push({
+              minX: blueprint.offset.x,
+              minY: blueprint.offset.y,
+              maxX: blueprint.offset.x + blueprintWidth,
+              maxY: blueprint.offset.y + blueprintHeight
+            });
+          }
+        }
+
+        if (bounds.length === 0) {
           return {
             viewport: {
               ...viewport,
               scale: 1,
               position: { x: 0, y: 0 }
-            }
+            },
+            lastFocusCenter: null
           };
         }
+
         const padding = 80;
-        const minX = Math.min(...elements.map((element) => element.position.x));
-        const minY = Math.min(...elements.map((element) => element.position.y));
-        const maxX = Math.max(
-          ...elements.map((element) => element.position.x + element.size.width)
-        );
-        const maxY = Math.max(
-          ...elements.map((element) => element.position.y + element.size.height)
-        );
+        const minX = Math.min(...bounds.map((box) => box.minX));
+        const minY = Math.min(...bounds.map((box) => box.minY));
+        const maxX = Math.max(...bounds.map((box) => box.maxX));
+        const maxY = Math.max(...bounds.map((box) => box.maxY));
         const contentWidth = Math.max(1, maxX - minX);
         const contentHeight = Math.max(1, maxY - minY);
         const availableWidth = Math.max(1, viewport.width - padding);
@@ -775,12 +802,14 @@ export const useCanvasStore = create<CanvasState>()(
           x: viewport.width / 2 - targetScale * centerX,
           y: viewport.height / 2 - targetScale * centerY
         };
+
         return {
           viewport: {
             ...viewport,
             scale: targetScale,
             position
-          }
+          },
+          lastFocusCenter: { x: centerX, y: centerY }
         };
       }),
     markDirty: () => set({ isDirty: true }),

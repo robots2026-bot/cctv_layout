@@ -319,10 +319,28 @@ export const CanvasStage = () => {
         }}
         onWheel={(event) => {
           event.evt.preventDefault();
+          const stageNode = stageRef.current;
+          if (!stageNode) {
+            return;
+          }
+          const pointer = stageNode.getPointerPosition();
+          if (!pointer) {
+            return;
+          }
           const scaleBy = 1.05;
+          const oldScale = stageNode.scaleX() || 1;
           const direction = event.evt.deltaY > 0 ? 1 : -1;
-          const newScale = direction > 0 ? viewport.scale / scaleBy : viewport.scale * scaleBy;
-          setViewport({ scale: newScale });
+          let nextScale = direction > 0 ? oldScale / scaleBy : oldScale * scaleBy;
+          nextScale = Math.min(4, Math.max(0.2, nextScale));
+          const mousePointTo = {
+            x: (pointer.x - stageNode.x()) / oldScale,
+            y: (pointer.y - stageNode.y()) / oldScale
+          };
+          const newPosition = {
+            x: pointer.x - mousePointTo.x * nextScale,
+            y: pointer.y - mousePointTo.y * nextScale
+          };
+          setViewport({ scale: nextScale, position: newPosition });
         }}
       >
         {image && (

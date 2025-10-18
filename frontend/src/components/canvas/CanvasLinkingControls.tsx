@@ -25,7 +25,10 @@ export const CanvasLinkingControls = () => {
     toggleLocked,
     focusAllElements,
     elements,
-    isDirty
+    blueprint,
+    isDirty,
+    viewport,
+    lastFocusCenter
   } = useCanvasStore((state) => ({
     mode: state.mode,
     setMode: state.setMode,
@@ -39,7 +42,10 @@ export const CanvasLinkingControls = () => {
     toggleLocked: state.toggleLocked,
     focusAllElements: state.focusAllElements,
     elements: state.elements,
-    isDirty: state.isDirty
+    blueprint: state.blueprint,
+    isDirty: state.isDirty,
+    viewport: state.viewport,
+    lastFocusCenter: state.lastFocusCenter
   }));
   const { saveLayout, isSaving } = useLayoutStore((state) => ({
     saveLayout: state.saveLayout,
@@ -79,17 +85,27 @@ export const CanvasLinkingControls = () => {
   };
 
   const handleResetZoom = () => {
-    setViewport({ scale: 1 });
+    const width = viewport.width ?? 0;
+    const height = viewport.height ?? 0;
+    if (lastFocusCenter && width > 0 && height > 0) {
+      const position = {
+        x: width / 2 - lastFocusCenter.x,
+        y: height / 2 - lastFocusCenter.y
+      };
+      setViewport({ scale: 1, position });
+      return;
+    }
+    setViewport({ scale: 1, position: { x: 0, y: 0 } });
   };
 
   const handleFocusAllElements = () => {
-    if (elements.length === 0) {
+    if (elements.length === 0 && !blueprint) {
       return;
     }
     focusAllElements();
   };
 
-  const hasElements = elements.length > 0;
+  const hasContent = elements.length > 0 || Boolean(blueprint);
 
   const resolveButtonClasses = (targetMode: CanvasMode) =>
     `rounded-md border px-3 py-1 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-sky-400/60 focus:ring-offset-2 focus:ring-offset-slate-900 ${
@@ -155,7 +171,7 @@ export const CanvasLinkingControls = () => {
           <button
             type="button"
             onClick={handleFocusAllElements}
-            disabled={!hasElements}
+            disabled={!hasContent}
             className="flex items-center gap-1 rounded-md border border-emerald-500/60 bg-emerald-500/20 px-3 py-1 text-[11px] text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/30 hover:text-emerald-100 disabled:cursor-not-allowed disabled:border-slate-700/60 disabled:bg-transparent disabled:text-slate-500"
           >
             <ArrowsPointingOutIcon className="h-4 w-4" />
