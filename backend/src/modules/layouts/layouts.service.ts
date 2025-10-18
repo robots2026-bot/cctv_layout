@@ -18,6 +18,7 @@ export interface LayoutDetail {
   background: { url: string | null; opacity: number } | null;
   elements: Record<string, unknown>[];
   connections: Record<string, unknown>[];
+  blueprint: Record<string, unknown> | null;
 }
 
 @Injectable()
@@ -55,6 +56,14 @@ export class LayoutsService {
     const connections = Array.isArray(latestVersion?.connectionsJson)
       ? (latestVersion?.connectionsJson as Record<string, unknown>[])
       : [];
+    const metadata =
+      latestVersion?.metadataJson && typeof latestVersion.metadataJson === 'object'
+        ? (latestVersion.metadataJson as Record<string, unknown>)
+        : null;
+    const blueprint =
+      metadata && typeof metadata.blueprint === 'object'
+        ? (metadata.blueprint as Record<string, unknown>)
+        : null;
     return {
       id: layout.id,
       projectId: layout.projectId,
@@ -64,7 +73,8 @@ export class LayoutsService {
         ? { url: layout.backgroundImageUrl, opacity: layout.backgroundOpacity }
         : null,
       elements,
-      connections
+      connections,
+      blueprint
     };
   }
 
@@ -121,6 +131,7 @@ export class LayoutsService {
       versionNo: (previous?.versionNo ?? 0) + 1,
       elementsJson: dto.elements,
       connectionsJson: dto.connections,
+      metadataJson: dto.metadata ?? null,
       createdBy: userId ?? null
     });
     const saved = await this.versionsRepository.save(nextVersion);

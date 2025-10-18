@@ -65,13 +65,25 @@ export const useLayoutStore = create<LayoutState>()(
         selected: connection.selected ?? false
       });
 
+      const serializeBlueprint = (blueprint: typeof canvasState.blueprint) => {
+        if (!blueprint) return null;
+        return {
+          url: blueprint.url,
+          naturalWidth: blueprint.naturalWidth,
+          naturalHeight: blueprint.naturalHeight,
+          scale: blueprint.scale,
+          opacity: blueprint.opacity,
+          offset: { ...blueprint.offset }
+        };
+      };
+
       const payload = {
         layoutId: targetLayoutId,
         elements: canvasState.elements.map(sanitizeElement),
         connections: canvasState.connections.map(sanitizeConnection),
         backgroundImageUrl: canvasState.background?.url ?? undefined,
         metadata: {
-          blueprint: canvasState.blueprint ?? null,
+          blueprint: serializeBlueprint(canvasState.blueprint),
           viewport: canvasState.viewport
         }
       };

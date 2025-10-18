@@ -13,13 +13,11 @@ const loadImageDimensions = (url: string) =>
 
 export const BlueprintControlsBar = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const { blueprint, setBlueprint, updateBlueprint, isLocked, focusAllElements, elements } = useCanvasStore((state) => ({
+  const { blueprint, setBlueprint, updateBlueprint, isLocked } = useCanvasStore((state) => ({
     blueprint: state.blueprint,
     setBlueprint: state.setBlueprint,
     updateBlueprint: state.updateBlueprint,
-    isLocked: state.isLocked,
-    focusAllElements: state.focusAllElements,
-    elements: state.elements
+    isLocked: state.isLocked
   }));
   const { addNotification } = useUIStore((state) => ({
     addNotification: state.addNotification
@@ -119,13 +117,6 @@ export const BlueprintControlsBar = () => {
 
   const controlsDisabled = isLocked || !hasBlueprint;
 
-  const handleFocusAllElements = () => {
-    if (elements.length === 0) {
-      return;
-    }
-    focusAllElements();
-  };
-
   return (
     <div className="pointer-events-auto flex flex-wrap items-center gap-4 rounded-lg border border-slate-700/70 bg-slate-900/80 px-4 py-2 text-xs text-slate-200 shadow-md shadow-slate-900/40">
       <div className="flex flex-wrap items-center gap-3">
@@ -159,14 +150,6 @@ export const BlueprintControlsBar = () => {
             className="w-28 accent-sky-400 disabled:opacity-40"
           />
           <span className="w-12 text-right text-slate-300">{(blueprint?.scale ?? 1).toFixed(2)}×</span>
-          <button
-            type="button"
-            onClick={handleFocusAllElements}
-            disabled={elements.length === 0}
-            className="rounded border border-emerald-500/60 px-2 py-1 text-[11px] text-emerald-200 transition hover:border-emerald-400 hover:text-emerald-100 disabled:cursor-not-allowed disabled:border-slate-700/60 disabled:text-slate-500"
-          >
-            显示全部
-          </button>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-slate-400">透明</span>

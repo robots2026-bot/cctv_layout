@@ -30,6 +30,9 @@ export class LayoutVersionEntity {
   @Column({ name: 'connections_json', type: 'jsonb' })
   connectionsJson!: unknown;
 
+  @Column({ name: 'metadata_json', type: 'jsonb', nullable: true })
+  metadataJson?: Record<string, unknown> | null;
+
   @Column({ name: 'created_by', type: 'uuid', nullable: true })
   createdBy?: string | null;
 

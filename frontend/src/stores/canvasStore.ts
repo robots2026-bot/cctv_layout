@@ -276,6 +276,28 @@ export const useCanvasStore = create<CanvasState>()(
         return { blueprint: nextBlueprint, isDirty: true };
       }),
     setCanvasData: (layout) => {
+      const sanitizeBlueprint = (raw: unknown) => {
+        if (!raw || typeof raw !== 'object') return null;
+        const blueprint = raw as Record<string, unknown>;
+        const url = typeof blueprint.url === 'string' ? blueprint.url : null;
+        if (!url) return null;
+        const naturalWidth = typeof blueprint.naturalWidth === 'number' ? blueprint.naturalWidth : 0;
+        const naturalHeight = typeof blueprint.naturalHeight === 'number' ? blueprint.naturalHeight : 0;
+        const scale = typeof blueprint.scale === 'number' ? blueprint.scale : 1;
+        const opacity = typeof blueprint.opacity === 'number' ? blueprint.opacity : 0.6;
+        const offsetSource = blueprint.offset as Record<string, unknown> | undefined;
+        const offsetX = typeof offsetSource?.x === 'number' ? offsetSource.x : 0;
+        const offsetY = typeof offsetSource?.y === 'number' ? offsetSource.y : 0;
+        return {
+          url,
+          naturalWidth,
+          naturalHeight,
+          scale,
+          opacity,
+          offset: { x: offsetX, y: offsetY }
+        };
+      };
+
       set({
         elements: layout.elements
           .filter((item): item is CanvasElement => Boolean(item) && !Array.isArray(item))
@@ -297,7 +319,7 @@ export const useCanvasStore = create<CanvasState>()(
             selected: false
           })),
         background: layout.background ? { url: layout.background.url } : null,
-        blueprint: layout.blueprint ?? null,
+        blueprint: sanitizeBlueprint(layout.blueprint ?? null),
         selectedElement: null,
         selectedConnectionId: null,
         hoveredElementId: null,
