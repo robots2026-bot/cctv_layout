@@ -1,4 +1,5 @@
 import { ChangeEvent, useRef } from 'react';
+import { MagnifyingGlassPlusIcon, SunIcon } from '@heroicons/react/24/solid';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { useUIStore } from '../../stores/uiStore';
 import { nanoid } from '../../utils/nanoid';
@@ -107,10 +108,34 @@ export const BlueprintControlsBar = () => {
     fileInputRef.current?.click();
   };
 
+  const applyScale = (nextScale: number) => {
+    if (!blueprint) {
+      return;
+    }
+    const clampedScale = Math.min(5, Math.max(0.1, nextScale));
+    const baseWidth = blueprint.naturalWidth || 0;
+    const baseHeight = blueprint.naturalHeight || 0;
+    if (baseWidth <= 0 || baseHeight <= 0) {
+      updateBlueprint({ scale: clampedScale });
+      return;
+    }
+    const currentWidth = baseWidth * (blueprint.scale || 1);
+    const currentHeight = baseHeight * (blueprint.scale || 1);
+    const centerX = blueprint.offset.x + currentWidth / 2;
+    const centerY = blueprint.offset.y + currentHeight / 2;
+    const newWidth = baseWidth * clampedScale;
+    const newHeight = baseHeight * clampedScale;
+    const nextOffset = {
+      x: centerX - newWidth / 2,
+      y: centerY - newHeight / 2
+    };
+    updateBlueprint({ scale: clampedScale, offset: nextOffset });
+  };
+
   const handleScaleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = Number(event.target.value);
     if (!Number.isFinite(value)) return;
-    updateBlueprint({ scale: Math.min(5, Math.max(0.1, value)) });
+    applyScale(value);
   };
 
   const handleOpacityChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -119,11 +144,19 @@ export const BlueprintControlsBar = () => {
     updateBlueprint({ opacity: Math.min(1, Math.max(0, value)) });
   };
 
+  const handleResetScale = () => {
+    applyScale(1);
+  };
+
+  const handleResetOpacity = () => {
+    updateBlueprint({ opacity: 0.5 });
+  };
+
   const handleRemoveBlueprint = () => {
     if (!blueprint) {
       return;
     }
-    if (!window.confirm('确认移除当前蓝图吗？此操作不可撤销。')) {
+    if (!window.confirm('确认移除当前蓝图吗？')) {
       return;
     }
     setBlueprint(null);
@@ -153,7 +186,15 @@ export const BlueprintControlsBar = () => {
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-slate-400">缩放</span>
+          <button
+            type="button"
+            onClick={handleResetScale}
+            disabled={controlsDisabled}
+            className="flex items-center gap-1 rounded-md border border-slate-700/70 bg-slate-800/70 px-2 py-1 text-slate-200 transition hover:bg-slate-700/70 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <MagnifyingGlassPlusIcon className="h-4 w-4" />
+            <span className="min-w-[24px] text-right">{(blueprint?.scale ?? 1).toFixed(2)}×</span>
+          </button>
           <input
             type="range"
             min={0.1}
@@ -162,12 +203,20 @@ export const BlueprintControlsBar = () => {
             value={blueprint?.scale ?? 1}
             onChange={handleScaleChange}
             disabled={controlsDisabled}
+            aria-label="蓝图缩放"
             className="w-28 accent-sky-400 disabled:opacity-40"
           />
-          <span className="w-12 text-right text-slate-300">{(blueprint?.scale ?? 1).toFixed(2)}×</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-slate-400">透明</span>
+          <button
+            type="button"
+            onClick={handleResetOpacity}
+            disabled={controlsDisabled}
+            className="flex items-center gap-1 rounded-md border border-slate-700/70 bg-slate-800/70 px-2 py-1 text-slate-200 transition hover:bg-slate-700/70 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <SunIcon className="h-4 w-4" />
+            <span className="min-w-[30px] text-right">{Math.round((blueprint?.opacity ?? 0.6) * 100)}%</span>
+          </button>
           <input
             type="range"
             min={0}
@@ -176,9 +225,9 @@ export const BlueprintControlsBar = () => {
             value={blueprint?.opacity ?? 0.6}
             onChange={handleOpacityChange}
             disabled={controlsDisabled}
+            aria-label="蓝图透明度"
             className="w-24 accent-amber-300 disabled:opacity-40"
           />
-          <span className="w-12 text-right text-slate-300">{Math.round((blueprint?.opacity ?? 0.6) * 100)}%</span>
         </div>
         <button
           type="button"
