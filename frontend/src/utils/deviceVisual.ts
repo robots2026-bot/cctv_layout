@@ -61,12 +61,12 @@ const STATUS_MAP: Record<string, StatusVisual> = {
     secondaryTextColor: '#bbf7d0'
   },
   offline: {
-    fill: '#475569',
+    fill: '#94a3b8',
     label: '离线',
-    nodeFill: '#1f2937',
+    nodeFill: '#374151',
     panelBg: '#111827',
-    textColor: '#e2e8f0',
-    secondaryTextColor: '#94a3b8'
+    textColor: '#e5e7eb',
+    secondaryTextColor: '#cbd5f5'
   },
   warning: {
     fill: '#f97316',
@@ -77,12 +77,12 @@ const STATUS_MAP: Record<string, StatusVisual> = {
     secondaryTextColor: '#fed7aa'
   },
   unknown: {
-    fill: '#475569',
+    fill: '#94a3b8',
     label: '离线',
-    nodeFill: '#1f2937',
+    nodeFill: '#374151',
     panelBg: '#111827',
-    textColor: '#e2e8f0',
-    secondaryTextColor: '#94a3b8'
+    textColor: '#e5e7eb',
+    secondaryTextColor: '#cbd5f5'
   }
 };
 
