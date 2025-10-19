@@ -2,6 +2,7 @@ import { Arrow, Group, Label, Line, Tag, Text } from 'react-konva';
 import { CanvasConnection } from '../../types/canvas';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { getDeviceCategory, getStatusVisual } from '../../utils/deviceVisual';
+import { resolveBridgeRole } from '../../utils/bridgeRole';
 import type { KonvaEventObject } from 'konva/lib/Node';
 
 interface ConnectionLineProps {
@@ -110,15 +111,22 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
 
   const fromCategory = getDeviceCategory(fromElement?.type);
   const toCategory = getDeviceCategory(toElement?.type);
+  const fromBridgeRole = fromCategory === 'bridge' ? resolveBridgeRole(fromElement?.metadata as Record<string, unknown> | undefined, fromElement?.name) : 'UNKNOWN';
+  const toBridgeRole = toCategory === 'bridge' ? resolveBridgeRole(toElement?.metadata as Record<string, unknown> | undefined, toElement?.name) : 'UNKNOWN';
   const isBridgeToBridge = fromCategory === 'bridge' && toCategory === 'bridge';
+  const isApToSt =
+    isBridgeToBridge &&
+    ((fromBridgeRole === 'AP' && toBridgeRole === 'ST') || (fromBridgeRole === 'ST' && toBridgeRole === 'AP'));
 
-  const segments = isBridgeToBridge
+  const shouldUseDualTrack = isApToSt;
+
+  const segments = shouldUseDualTrack
     ? calculateConnectionSegments(fromPoint, toPoint, connection.kind)
     : null;
 
   const upstream = segments?.upstream ?? { start: fromPoint, end: toPoint };
   const downstream = segments?.downstream ?? { start: fromPoint, end: toPoint };
-  const baseDash = isBridgeToBridge ? [10, 6] : undefined;
+  const baseDash = shouldUseDualTrack ? [10, 6] : undefined;
 
   const status = getStatusVisual(connection.status ?? 'online');
 
@@ -220,7 +228,7 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
         strokeWidth={strokeWidthMain}
         dash={baseDash}
       />
-      {isBridgeToBridge && (
+      {shouldUseDualTrack && (
         <Line
           points={makePoints(downstream.start, downstream.end)}
           stroke={status.fill}
@@ -230,16 +238,16 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
         />
       )}
 
-      {isBridgeToBridge &&
+      {shouldUseDualTrack &&
         ARROW_POSITIONS.map((t) =>
           createArrow(t, upstream.start, upstream.end, status.fill, arrowOpacityMain)
         )}
-      {isBridgeToBridge &&
+      {shouldUseDualTrack &&
         ARROW_POSITIONS.map((t) =>
           createArrow(t, downstream.start, downstream.end, status.fill, downstreamOpacity)
         )}
 
-      {isBridgeToBridge ? (
+      {shouldUseDualTrack ? (
         <>
           {upstreamLabel && (
             <Label

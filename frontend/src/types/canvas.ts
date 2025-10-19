@@ -73,4 +73,5 @@ export interface DeviceSummary {
   ip?: string;
   model?: string;
   status?: 'online' | 'offline' | 'warning' | 'unknown';
+  bridgeRole?: 'AP' | 'ST' | 'UNKNOWN';
 }

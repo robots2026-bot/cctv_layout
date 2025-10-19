@@ -11,6 +11,7 @@ type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
 type RealtimeEvent =
   | { event: 'device.update'; payload: DeviceSummary }
+  | { event: 'device.remove'; payload: { id: string } }
   | { event: 'presence.sync'; payload: { users: string[] } }
   | {
       event: 'projects.updated';
@@ -26,8 +27,28 @@ interface RealtimeState {
   fetchAvailableDevices: (projectId: string) => Promise<void>;
   registerDevice: (
     projectId: string,
-    payload: { name?: string; type: string; ip?: string; model: string; status?: DeviceSummary['status'] }
+    payload: {
+      name?: string;
+      type: string;
+      ip?: string;
+      model: string;
+      status?: DeviceSummary['status'];
+      bridgeRole?: 'AP' | 'ST';
+    }
   ) => Promise<DeviceSummary | null>;
+  updateDevice: (
+    projectId: string,
+    deviceId: string,
+    payload: {
+      name?: string;
+      type?: string;
+      ip?: string;
+      model?: string;
+      status?: DeviceSummary['status'];
+      bridgeRole?: 'AP' | 'ST';
+    }
+  ) => Promise<DeviceSummary | null>;
+  deleteDevice: (projectId: string, deviceId: string) => Promise<void>;
   handleEvent: (message: RealtimeEvent) => void;
   consumeDevice: (deviceId: string) => void;
   restoreDevice: (device: DeviceSummary) => void;
@@ -102,48 +123,85 @@ export const useRealtimeStore = create<RealtimeState>()(
         const normalizedIp = payload.ip?.trim() ?? '';
         const normalizedModel = payload.model.trim();
         const requiresIp = normalizedType.toLowerCase() !== 'switch';
+        const normalizedRole = payload.bridgeRole ? payload.bridgeRole.toUpperCase() : undefined;
+        const requiresRole = normalizedType.toLowerCase() === 'bridge';
 
         if (!normalizedType || !normalizedModel || (requiresIp && !normalizedIp)) {
           throw new Error('请填写设备类型、型号，及必要时的 IP 地址');
         }
 
+        if (requiresRole && (normalizedRole !== 'AP' && normalizedRole !== 'ST')) {
+          throw new Error('网桥类型需要选择 AP 或 ST');
+        }
+
         const fallbackName = normalizedName || (normalizedIp ? `${normalizedType}-${normalizedIp}` : `${normalizedType}-${normalizedModel || Date.now().toString(36)}`);
 
-        const response = await apiClient.post(`/projects/${projectId}/devices/register`, {
+        const response = await apiClient.post<DeviceSummary>(`/projects/${projectId}/devices/register`, {
           name: fallbackName,
           type: normalizedType,
           ipAddress: normalizedIp || undefined,
           model: normalizedModel,
-          status: desiredStatus ?? 'unknown'
+          status: desiredStatus ?? 'unknown',
+          bridgeRole: normalizedRole
         });
-        const device = response.data as {
-          id: string;
-          name: string;
-          type: string;
-          ipAddress?: string | null;
-          status?: string | null;
-          metadata?: { model?: string | null };
-        };
-
-        const summary: DeviceSummary = {
-          id: device.id,
-          name: device.name,
-          type: device.type,
-          ip: device.ipAddress ?? undefined,
-          model: device.metadata?.model ?? undefined,
-          status: (device.status as DeviceSummary['status']) ?? 'unknown'
+        const summary = response.data;
+        const normalizedSummary: DeviceSummary = {
+          ...summary,
+          bridgeRole: summary.bridgeRole ?? 'UNKNOWN'
         };
 
         set((state) => ({
-          availableDevices: state.availableDevices.some((item) => item.id === summary.id)
-            ? state.availableDevices.map((item) => (item.id === summary.id ? summary : item))
-            : [...state.availableDevices, summary]
+          availableDevices: state.availableDevices.some((item) => item.id === normalizedSummary.id)
+            ? state.availableDevices.map((item) =>
+                item.id === normalizedSummary.id ? normalizedSummary : item
+              )
+            : [...state.availableDevices, normalizedSummary]
         }));
 
-        return summary;
+        return normalizedSummary;
       } catch (error) {
         console.error('手动注册设备失败', error);
         return null;
+      }
+    },
+    updateDevice: async (projectId, deviceId, payload) => {
+      try {
+        const response = await apiClient.patch<DeviceSummary>(
+          `/projects/${projectId}/devices/${deviceId}`,
+          {
+            name: payload.name,
+            type: payload.type,
+            ipAddress: payload.ip,
+            model: payload.model,
+            status: payload.status,
+            bridgeRole: payload.bridgeRole
+          }
+        );
+        const summary = response.data;
+        const normalizedSummary: DeviceSummary = {
+          ...summary,
+          bridgeRole: summary.bridgeRole ?? 'UNKNOWN'
+        };
+        set((state) => ({
+          availableDevices: state.availableDevices.map((device) =>
+            device.id === normalizedSummary.id ? normalizedSummary : device
+          )
+        }));
+        return normalizedSummary;
+      } catch (error) {
+        console.error('更新设备失败', error);
+        throw error;
+      }
+    },
+    deleteDevice: async (projectId, deviceId) => {
+      try {
+        await apiClient.delete(`/projects/${projectId}/devices/${deviceId}`);
+        set((state) => ({
+          availableDevices: state.availableDevices.filter((device) => device.id !== deviceId)
+        }));
+      } catch (error) {
+        console.error('删除设备失败', error);
+        throw error;
       }
     },
     consumeDevice: (deviceId: string) => {
@@ -202,6 +260,12 @@ export const useRealtimeStore = create<RealtimeState>()(
               : [...state.availableDevices, message.payload];
             return { availableDevices };
           });
+          break;
+        }
+        case 'device.remove': {
+          set((state) => ({
+            availableDevices: state.availableDevices.filter((device) => device.id !== message.payload.id)
+          }));
           break;
         }
         case 'presence.sync': {

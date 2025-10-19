@@ -229,9 +229,9 @@
 
 ## 4. 设备资源接口（Devices）
 
-### 3.1 查询待布局设备
+### 4.1 查询待布局设备
 - **Method**：GET `/projects/:projectId/devices`
-- **用途**：用于设备侧栏拉取未放置设备列表；服务端需过滤掉已在当前布局中的设备。
+- **用途**：用于设备侧栏拉取未放置设备列表；服务端会聚合项目内所有布局的当前版本（`layouts.current_version_id`），过滤掉存在于任何布局节点 `elementsJson[*].deviceId` 的设备。
 - **响应** `200 OK`：
   ```json
   [
@@ -241,12 +241,13 @@
       "type": "Camera",
       "model": "DS-2DE4225IW",
       "ip": "192.168.10.15",
-      "status": "online"
+      "status": "online",
+      "bridgeRole": "AP"
     }
   ]
   ```
 
-### 3.2 手动注册/更新设备
+### 4.2 手动注册/更新设备
 - **Method**：POST `/projects/:projectId/devices/register`
 - **请求体**：
   ```json
@@ -255,7 +256,8 @@
     "type": "Camera",               // 必填，限定枚举：Camera|NVR|Bridge|Switch
     "model": "DS-2DE4225IW",        // 必填，交换机默认 V600
     "ipAddress": "192.168.10.15",   // Camera/NVR/Bridge 必填；Switch 可省略
-    "status": "unknown"             // 可选：online|offline|unknown
+    "status": "unknown",            // 可选：online|offline|unknown
+    "bridgeRole": "AP"              // 仅 Bridge 类型传入 AP|ST
   }
   ```
 - **响应** `200 OK`：
@@ -274,6 +276,20 @@
 - **行为**：
   - 若 IP 已存在同项目，执行幂等更新。
   - 保存后应通过实时通道 `device.update` 推送。
+
+### 4.3 编辑未布局设备
+- **Method**：PATCH `/projects/:projectId/devices/:deviceId`
+- **请求体**：与注册接口字段一致，全部可选。Bridge 类型如需调整角色必须传入 `bridgeRole`。
+- **响应** `200 OK`：返回更新后的设备摘要。
+- **约束**：
+  1. 仅允许编辑未布局设备；若设备已出现在任一布局当前版本中，返回 `409 Conflict`，`{ "error": "Conflict", "message": "Device <id> is already placed in a layout" }`。
+  2. 设备类型切换为 `Bridge` 时必须提供 `bridgeRole`。
+
+### 4.4 删除未布局设备
+- **Method**：DELETE `/projects/:projectId/devices/:deviceId`
+- **响应** `200 OK`：`{ "success": true }`
+- **约束**：同 4.3，仅允许删除未布局设备；设备已在布局内引用时返回 `409 Conflict`。
+- **行为**：删除成功后广播 `device.remove`，前端从未布局列表中移除。
 
 ## 5. 实时通道（Socket.IO）
 

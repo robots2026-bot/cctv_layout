@@ -11,6 +11,7 @@ import {
 import { nanoid } from '../utils/nanoid';
 import { useRealtimeStore } from './realtimeStore';
 import { getDeviceCategory } from '../utils/deviceVisual';
+import { resolveBridgeRole, type BridgeRole } from '../utils/bridgeRole';
 
 interface CanvasBackground {
   url: string | null;
@@ -154,7 +155,8 @@ const evaluateEndpointConstraints = (
   element: CanvasElement,
   other: CanvasElement,
   connections: CanvasConnection[],
-  lookup: Map<string, ReturnType<typeof getDeviceCategory>>
+  lookup: Map<string, ReturnType<typeof getDeviceCategory>>,
+  elements: CanvasElement[]
 ): string | null => {
   const category = lookup.get(getElementKey(element)) ?? getDeviceCategory(element.type);
   const otherCategory = lookup.get(getElementKey(other)) ?? getDeviceCategory(other.type);
@@ -175,25 +177,70 @@ const evaluateEndpointConstraints = (
 
   if (category === 'bridge') {
     const existing = listConnectionsFor(connections, key);
-    let bridgeToBridgeCount = 0;
-    let bridgeToOthersCount = 0;
-    existing.forEach((connection) => {
-      const otherKey = resolveOtherKey(connection, key);
-      const otherCat = otherKey
-        ? lookup.get(otherKey) ?? 'other'
-        : 'other';
-      if (otherCat === 'bridge') {
-        bridgeToBridgeCount += 1;
-      } else {
-        bridgeToOthersCount += 1;
-      }
-    });
+    const selfRole = resolveBridgeRole(element.metadata as Record<string, unknown> | undefined, element.name);
+    const otherRole = resolveBridgeRole(other.metadata as Record<string, unknown> | undefined, other.name);
 
-    if (otherCategory === 'bridge' && bridgeToBridgeCount >= 1) {
-      return '网桥之间仅允许一条连接';
+    const findElementByKey = (targetKey: string | null | undefined) =>
+      targetKey
+        ? elements.find(
+            (item) => item.id === targetKey || item.deviceId === targetKey || getElementKey(item) === targetKey
+          ) ?? null
+        : null;
+
+    const countConnectionsByRole = (role: BridgeRole) =>
+      existing.filter((connection) => {
+        const otherKeyForConnection = resolveOtherKey(connection, key);
+        const counterpart = findElementByKey(otherKeyForConnection);
+        if (!counterpart) return false;
+        const counterpartRole = resolveBridgeRole(
+          counterpart.metadata as Record<string, unknown> | undefined,
+          counterpart.name
+        );
+        return counterpartRole === role;
+      }).length;
+
+    if (selfRole === 'AP' && otherRole === 'ST') {
+      // AP 可挂多个 ST
+      return null;
     }
-    if (otherCategory !== 'bridge' && bridgeToOthersCount >= 1) {
+
+    if (selfRole === 'ST' && otherRole === 'AP') {
+      const apConnections = countConnectionsByRole('AP');
+      if (apConnections >= 1) {
+        return '站点仅允许连接一个 AP';
+      }
+      return null;
+    }
+
+    if (selfRole === 'ST' && otherRole === 'ST') {
+      return '站点之间禁止直接连接';
+    }
+
+    if (selfRole === 'AP' && otherRole === 'AP') {
+      const apConnections = countConnectionsByRole('AP');
+      if (apConnections >= 1) {
+        return 'AP 之间仅允许一条连接';
+      }
+      return null;
+    }
+
+    const existingNonBridge = existing.filter((connection) => {
+      const otherKeyForConnection = resolveOtherKey(connection, key);
+      const counterpart = findElementByKey(otherKeyForConnection);
+      if (!counterpart) return false;
+      const counterpartCategory = lookup.get(getElementKey(counterpart)) ?? getDeviceCategory(counterpart.type);
+      return counterpartCategory !== 'bridge';
+    }).length;
+
+    if (otherCategory !== 'bridge' && existingNonBridge >= 1) {
       return '网桥对其他设备仅允许一条连接';
+    }
+
+    if (otherCategory === 'bridge') {
+      const bridgeConnections = existing.length - existingNonBridge;
+      if (bridgeConnections >= 1) {
+        return '网桥之间仅允许一条连接';
+      }
     }
   }
 
@@ -212,11 +259,17 @@ const canEstablishConnection = (
   if (createsCycle(connections, fromKey, toKey)) {
     return { allowed: false, reason: '连接将形成环路，已阻止' } as const;
   }
-  const fromCheck = evaluateEndpointConstraints(fromElement, toElement, connections, lookup);
+  const fromCheck = evaluateEndpointConstraints(
+    fromElement,
+    toElement,
+    connections,
+    lookup,
+    elements
+  );
   if (fromCheck) {
     return { allowed: false, reason: fromCheck };
   }
-  const toCheck = evaluateEndpointConstraints(toElement, fromElement, connections, lookup);
+  const toCheck = evaluateEndpointConstraints(toElement, fromElement, connections, lookup, elements);
   if (toCheck) {
     return { allowed: false, reason: toCheck };
   }
@@ -354,7 +407,8 @@ export const useCanvasStore = create<CanvasState>()(
             ip: device.ip,
             status: device.status,
             model: device.model,
-            sourceDeviceId: device.id
+            sourceDeviceId: device.id,
+            bridgeRole: device.bridgeRole
           },
           position: position ?? { x: 50, y: 50 },
           size: { width: 150, height: 70 },

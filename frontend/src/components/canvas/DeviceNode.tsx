@@ -2,6 +2,7 @@ import { Circle, Group, Rect, Text } from 'react-konva';
 import { CanvasElement } from '../../types/canvas';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { deriveSwitchLabel, getDeviceCategory, getStatusVisual } from '../../utils/deviceVisual';
+import { resolveBridgeRole } from '../../utils/bridgeRole';
 
 interface DeviceNodeProps {
   element: CanvasElement;
@@ -36,6 +37,7 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
 
   const statusConfig = getStatusVisual(element.metadata?.status as string | undefined);
   const category = getDeviceCategory(element.type);
+  const bridgeRole = category === 'bridge' ? resolveBridgeRole(element.metadata as Record<string, unknown>, element.name) : 'UNKNOWN';
   const width = element.size?.width ?? 150;
   const height = element.size?.height ?? 70;
   const position = element.position ?? { x: 0, y: 0 };
@@ -48,12 +50,28 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
     const baseFill = '#111827';
 
     if (category === 'bridge') {
+      const badgeLabel = bridgeRole === 'AP' ? 'AP' : bridgeRole === 'ST' ? 'ST' : null;
       return (
         <Group>
           <Rect x={8} y={2} width={18} height={32} cornerRadius={3} fill={baseFill} stroke={accent} strokeWidth={2} />
           <Circle x={17} y={10} radius={2.5} fill={accent} />
           <Circle x={17} y={18} radius={2.5} fill={accent} opacity={0.6} />
           <Circle x={17} y={26} radius={2.5} fill={accent} opacity={0.4} />
+          {badgeLabel && (
+            <Group x={6} y={36}>
+              <Rect width={24} height={14} fill="#1d4ed8" cornerRadius={4} opacity={0.85} />
+              <Text
+                text={badgeLabel}
+                fontSize={10}
+                fontStyle="bold"
+                fill="#f8fafc"
+                width={24}
+                height={14}
+                verticalAlign="middle"
+                align="center"
+              />
+            </Group>
+          )}
         </Group>
       );
     }

@@ -1,19 +1,27 @@
-import { IsIP, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
+import {
+  IsIP,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateIf
+} from 'class-validator';
 import { DeviceStatus } from '../entities/device.entity';
 
-export class RegisterDeviceDto {
+export class UpdateDeviceDto {
   @IsString()
   @IsOptional()
   @MaxLength(120)
   name?: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(60)
   @IsIn(['Camera', 'NVR', 'Bridge', 'Switch'])
-  type!: string;
+  type?: string;
 
-  @ValidateIf((o) => o.type !== 'Switch' || Boolean(o.ipAddress))
+  @ValidateIf((payload) => payload.ipAddress !== undefined)
   @IsString()
   @IsNotEmpty()
   @IsIP()
@@ -28,7 +36,9 @@ export class RegisterDeviceDto {
   @IsOptional()
   status?: DeviceStatus;
 
-  @ValidateIf((payload) => payload.type === 'Bridge')
+  @ValidateIf(
+    (payload) => payload.bridgeRole !== undefined || payload.type === 'Bridge'
+  )
   @IsString()
   @IsIn(['AP', 'ST'])
   bridgeRole?: 'AP' | 'ST';
