@@ -11,7 +11,7 @@ type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
 type RealtimeEvent =
   | { event: 'device.update'; payload: DeviceSummary }
-  | { event: 'device.remove'; payload: { id: string } }
+  | { event: 'device.remove'; payload: { id: string; mac: string | null } }
   | { event: 'presence.sync'; payload: { users: string[] } }
   | {
       event: 'projects.updated';
@@ -25,37 +25,30 @@ interface RealtimeState {
   connect: () => void;
   disconnect: () => void;
   fetchAvailableDevices: (projectId: string) => Promise<void>;
-  registerDevice: (
-    projectId: string,
-    payload: {
-      name?: string;
-      type: string;
-      ip?: string;
-      model: string;
-      status?: DeviceSummary['status'];
-      bridgeRole?: 'AP' | 'ST';
-    }
-  ) => Promise<DeviceSummary | null>;
-  updateDevice: (
+  updateDeviceName: (
     projectId: string,
     deviceId: string,
     payload: {
-      name?: string;
-      type?: string;
-      ip?: string;
-      model?: string;
-      status?: DeviceSummary['status'];
-      bridgeRole?: 'AP' | 'ST';
+      name: string;
     }
   ) => Promise<DeviceSummary | null>;
   deleteDevice: (projectId: string, deviceId: string) => Promise<void>;
   handleEvent: (message: RealtimeEvent) => void;
-  consumeDevice: (deviceId: string) => void;
+  consumeDevice: (device: DeviceSummary) => void;
   restoreDevice: (device: DeviceSummary) => void;
   syncWithPlacedDevices: () => void;
 }
 
 let socket: Socket | null = null;
+
+const getDeviceKey = (device: DeviceSummary): string => device.mac ?? device.id;
+const getPlacedKeys = () =>
+  new Set(
+    useCanvasStore
+      .getState()
+      .elements.map((element) => element.deviceMac ?? element.deviceId)
+      .filter(Boolean) as string[]
+  );
 
 export const useRealtimeStore = create<RealtimeState>()(
   devtools((set) => ({
@@ -102,89 +95,36 @@ export const useRealtimeStore = create<RealtimeState>()(
     fetchAvailableDevices: async (projectId: string) => {
       try {
         const response = await apiClient.get<DeviceSummary[]>(`/projects/${projectId}/devices`);
-        const placedIds = new Set(
-          useCanvasStore
-            .getState()
-            .elements.map((element) => element.deviceId)
-            .filter(Boolean) as string[]
-        );
-        const filtered = response.data.filter((device) => !placedIds.has(device.id));
+        const placedKeys = getPlacedKeys();
+        const filtered = response.data
+          .map((device) => ({
+            ...device,
+            mac: device.mac ?? null,
+            alias: device.alias ?? null
+          }))
+          .filter((device) => !placedKeys.has(getDeviceKey(device)));
         set({ availableDevices: filtered });
       } catch (error) {
         console.error('获取可用设备失败', error);
       }
     },
-    registerDevice: async (projectId, payload) => {
-      try {
-        const desiredStatus =
-          payload.status && payload.status !== 'warning' ? payload.status : undefined;
-        const normalizedName = payload.name?.trim() ?? '';
-        const normalizedType = payload.type.trim();
-        const normalizedIp = payload.ip?.trim() ?? '';
-        const normalizedModel = payload.model.trim();
-        const requiresIp = normalizedType.toLowerCase() !== 'switch';
-        const normalizedRole = payload.bridgeRole ? payload.bridgeRole.toUpperCase() : undefined;
-        const requiresRole = normalizedType.toLowerCase() === 'bridge';
-
-        if (!normalizedType || !normalizedModel || (requiresIp && !normalizedIp)) {
-          throw new Error('请填写设备类型、型号，及必要时的 IP 地址');
-        }
-
-        if (requiresRole && (normalizedRole !== 'AP' && normalizedRole !== 'ST')) {
-          throw new Error('网桥类型需要选择 AP 或 ST');
-        }
-
-        const fallbackName = normalizedName || (normalizedIp ? `${normalizedType}-${normalizedIp}` : `${normalizedType}-${normalizedModel || Date.now().toString(36)}`);
-
-        const response = await apiClient.post<DeviceSummary>(`/projects/${projectId}/devices/register`, {
-          name: fallbackName,
-          type: normalizedType,
-          ipAddress: normalizedIp || undefined,
-          model: normalizedModel,
-          status: desiredStatus ?? 'unknown',
-          bridgeRole: normalizedRole
-        });
-        const summary = response.data;
-        const normalizedSummary: DeviceSummary = {
-          ...summary,
-          bridgeRole: summary.bridgeRole ?? 'UNKNOWN'
-        };
-
-        set((state) => ({
-          availableDevices: state.availableDevices.some((item) => item.id === normalizedSummary.id)
-            ? state.availableDevices.map((item) =>
-                item.id === normalizedSummary.id ? normalizedSummary : item
-              )
-            : [...state.availableDevices, normalizedSummary]
-        }));
-
-        return normalizedSummary;
-      } catch (error) {
-        console.error('手动注册设备失败', error);
-        return null;
-      }
-    },
-    updateDevice: async (projectId, deviceId, payload) => {
+    updateDeviceName: async (projectId, deviceId, payload) => {
       try {
         const response = await apiClient.patch<DeviceSummary>(
           `/projects/${projectId}/devices/${deviceId}`,
           {
-            name: payload.name,
-            type: payload.type,
-            ipAddress: payload.ip,
-            model: payload.model,
-            status: payload.status,
-            bridgeRole: payload.bridgeRole
+            name: payload.name
           }
         );
         const summary = response.data;
         const normalizedSummary: DeviceSummary = {
           ...summary,
-          bridgeRole: summary.bridgeRole ?? 'UNKNOWN'
+          mac: summary.mac ?? null,
+          alias: summary.alias ?? null
         };
         set((state) => ({
           availableDevices: state.availableDevices.map((device) =>
-            device.id === normalizedSummary.id ? normalizedSummary : device
+            getDeviceKey(device) === getDeviceKey(normalizedSummary) ? normalizedSummary : device
           )
         }));
         return normalizedSummary;
@@ -196,43 +136,56 @@ export const useRealtimeStore = create<RealtimeState>()(
     deleteDevice: async (projectId, deviceId) => {
       try {
         await apiClient.delete(`/projects/${projectId}/devices/${deviceId}`);
-        set((state) => ({
-          availableDevices: state.availableDevices.filter((device) => device.id !== deviceId)
-        }));
+        set((state) => {
+          const target = state.availableDevices.find((device) => device.id === deviceId);
+          const key = target ? getDeviceKey(target) : null;
+          return {
+            availableDevices: state.availableDevices.filter((device) => {
+              if (!key) {
+                return device.id !== deviceId;
+              }
+              return getDeviceKey(device) !== key;
+            })
+          };
+        });
       } catch (error) {
         console.error('删除设备失败', error);
         throw error;
       }
     },
-    consumeDevice: (deviceId: string) => {
+    consumeDevice: (device) => {
+      const key = getDeviceKey(device);
       set((state) => ({
-        availableDevices: state.availableDevices.filter((device) => device.id !== deviceId)
+        availableDevices: state.availableDevices.filter(
+          (item) => getDeviceKey(item) !== key
+        )
       }));
     },
     restoreDevice: (device) => {
       set((state) => {
-        const exists = state.availableDevices.some((item) => item.id === device.id);
+        const exists = state.availableDevices.some(
+          (item) => getDeviceKey(item) === getDeviceKey(device)
+        );
         if (exists) {
           return {
             availableDevices: state.availableDevices.map((item) =>
-              item.id === device.id ? { ...item, ...device } : item
+              getDeviceKey(item) === getDeviceKey(device)
+                ? { ...item, ...device, alias: device.alias ?? null }
+                : item
             )
           };
         }
         return {
-          availableDevices: [...state.availableDevices, device]
+          availableDevices: [...state.availableDevices, { ...device, alias: device.alias ?? null }]
         };
       });
     },
     syncWithPlacedDevices: () => {
       set((state) => {
-        const placedIds = new Set(
-          useCanvasStore
-            .getState()
-            .elements.map((element) => element.deviceId)
-            .filter(Boolean) as string[]
+        const placedKeys = getPlacedKeys();
+        const filtered = state.availableDevices.filter(
+          (device) => !placedKeys.has(getDeviceKey(device))
         );
-        const filtered = state.availableDevices.filter((device) => !placedIds.has(device.id));
         if (filtered.length === state.availableDevices.length) {
           return state.availableDevices === filtered ? {} : { availableDevices: filtered };
         }
@@ -243,28 +196,34 @@ export const useRealtimeStore = create<RealtimeState>()(
       switch (message.event) {
         case 'device.update': {
           set((state) => {
-            const placedIds = new Set(
-              useCanvasStore
-                .getState()
-                .elements.map((element) => element.deviceId)
-                .filter(Boolean) as string[]
-            );
-            if (placedIds.has(message.payload.id)) {
+            const placedKeys = getPlacedKeys();
+            const normalized: DeviceSummary = {
+              ...message.payload,
+              mac: message.payload.mac ?? null,
+              alias: message.payload.alias ?? null
+            };
+            if (placedKeys.has(getDeviceKey(normalized))) {
               return {};
             }
-            const exists = state.availableDevices.some((device) => device.id === message.payload.id);
+            const exists = state.availableDevices.some(
+              (device) => getDeviceKey(device) === getDeviceKey(normalized)
+            );
             const availableDevices = exists
               ? state.availableDevices.map((device) =>
-                  device.id === message.payload.id ? { ...device, ...message.payload } : device
+                  getDeviceKey(device) === getDeviceKey(normalized)
+                    ? { ...device, ...normalized }
+                    : device
                 )
-              : [...state.availableDevices, message.payload];
+              : [...state.availableDevices, normalized];
             return { availableDevices };
           });
           break;
         }
         case 'device.remove': {
           set((state) => ({
-            availableDevices: state.availableDevices.filter((device) => device.id !== message.payload.id)
+            availableDevices: state.availableDevices.filter(
+              (device) => device.id !== message.payload.id && device.mac !== message.payload.mac
+            )
           }));
           break;
         }

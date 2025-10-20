@@ -8,7 +8,7 @@ const columnOptions = (property: keyof ProjectEntity) =>
 
 describe('ProjectEntity column metadata', () => {
   it('uses varchar for location details', () => {
-    const location = columnOptions('location');
+    const location = columnOptions('locationText');
 
     expect(location.type).toBe('varchar');
     expect(location.length).toBe(255);
@@ -22,4 +22,3 @@ describe('ProjectEntity column metadata', () => {
     expect(defaultLayoutId.nullable).toBe(true);
   });
 });
-

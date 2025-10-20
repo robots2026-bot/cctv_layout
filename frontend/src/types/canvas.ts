@@ -3,6 +3,7 @@ export interface CanvasElement {
   name: string;
   type: string;
   deviceId?: string;
+  deviceMac?: string | null;
   metadata?: {
     ip?: string;
     [key: string]: unknown;
@@ -68,10 +69,11 @@ export interface CanvasLayout {
 
 export interface DeviceSummary {
   id: string;
+  mac: string | null;
+  alias?: string | null;
   name: string;
   type: string;
   ip?: string;
   model?: string;
   status?: 'online' | 'offline' | 'warning' | 'unknown';
-  bridgeRole?: 'AP' | 'ST' | 'UNKNOWN';
 }

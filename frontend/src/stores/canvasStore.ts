@@ -84,7 +84,18 @@ const defaultViewport: CanvasViewport = {
   position: { x: 0, y: 0 }
 };
 
-const getElementKey = (element: CanvasElement): string => element.deviceId ?? element.id;
+const getElementKey = (element: CanvasElement): string =>
+  element.deviceMac ?? element.deviceId ?? element.id;
+
+const matchesElementKey = (element: CanvasElement, key: string): boolean => {
+  if (!key) return false;
+  return (
+    element.id === key ||
+    element.deviceId === key ||
+    element.deviceMac === key ||
+    getElementKey(element) === key
+  );
+};
 
 const buildCategoryLookup = (elements: CanvasElement[]) => {
   const lookup = new Map<string, ReturnType<typeof getDeviceCategory>>();
@@ -181,11 +192,7 @@ const evaluateEndpointConstraints = (
     const otherRole = resolveBridgeRole(other.metadata as Record<string, unknown> | undefined, other.name);
 
     const findElementByKey = (targetKey: string | null | undefined) =>
-      targetKey
-        ? elements.find(
-            (item) => item.id === targetKey || item.deviceId === targetKey || getElementKey(item) === targetKey
-          ) ?? null
-        : null;
+      targetKey ? elements.find((item) => matchesElementKey(item, targetKey)) ?? null : null;
 
     const countConnectionsByRole = (role: BridgeRole) =>
       existing.filter((connection) => {
@@ -364,13 +371,26 @@ export const useCanvasStore = create<CanvasState>()(
       set({
         elements: layout.elements
           .filter((item): item is CanvasElement => Boolean(item) && !Array.isArray(item))
-          .map((element) => ({
-            ...element,
-            metadata: element.metadata ?? {},
-            position: element.position ?? { x: 0, y: 0 },
-            size: element.size ?? { width: 150, height: 70 },
-            selected: false
-          })),
+          .map((element) => {
+            const metadata = (element.metadata ?? {}) as Record<string, unknown>;
+            if (!metadata.sourceDeviceId && element.deviceId) {
+              metadata.sourceDeviceId = element.deviceId;
+            }
+            if (!metadata.sourceDeviceMac && (element as CanvasElement).deviceMac) {
+              metadata.sourceDeviceMac = (element as CanvasElement).deviceMac;
+            }
+            return {
+              ...element,
+              deviceMac:
+                (element as CanvasElement).deviceMac ??
+                (metadata.sourceDeviceMac as string | undefined) ??
+                null,
+              metadata,
+              position: element.position ?? { x: 0, y: 0 },
+              size: element.size ?? { width: 150, height: 70 },
+              selected: false
+            };
+          }),
         connections: layout.connections
           .filter((item): item is CanvasConnection => Boolean(item) && !Array.isArray(item))
           .map((connection) => ({
@@ -400,15 +420,17 @@ export const useCanvasStore = create<CanvasState>()(
       set((state) => {
         const newElement: CanvasElement = {
           id: nanoid(),
-          name: device.name,
+          name: device.alias?.trim() && device.alias.trim().length > 0 ? device.alias.trim() : device.name,
           type: device.type,
           deviceId: device.id,
+          deviceMac: device.mac ?? null,
           metadata: {
             ip: device.ip,
             status: device.status,
             model: device.model,
             sourceDeviceId: device.id,
-            bridgeRole: device.bridgeRole
+            sourceDeviceMac: device.mac ?? null,
+            sourceAlias: device.alias ?? null
           },
           position: position ?? { x: 50, y: 50 },
           size: { width: 150, height: 70 },
@@ -459,7 +481,12 @@ export const useCanvasStore = create<CanvasState>()(
         );
         const targetElement = updatedElements.find((element) => element.id === elementId);
         const targetKeys = targetElement
-          ? [targetElement.deviceId ?? targetElement.id, targetElement.id]
+          ? [
+              getElementKey(targetElement),
+              targetElement.deviceId,
+              targetElement.deviceMac,
+              targetElement.id
+            ].filter((value): value is string => Boolean(value))
           : [];
         const center = targetElement
           ? {
@@ -621,8 +648,8 @@ export const useCanvasStore = create<CanvasState>()(
             linking: { active: false, fromElementId: null, pointer: null }
           };
         }
-        const fromDeviceKey = fromElement.deviceId ?? fromElement.id;
-        const toDeviceKey = toElement.deviceId ?? toElement.id;
+        const fromDeviceKey = getElementKey(fromElement);
+        const toDeviceKey = getElementKey(toElement);
         const exists = state.connections.some((connection) => {
           const fromKey = connection.fromDeviceId ?? connection.id;
           const toKey = connection.toDeviceId ?? connection.id;
@@ -685,8 +712,8 @@ export const useCanvasStore = create<CanvasState>()(
             linking: { active: false, fromElementId: null, pointer: null }
           };
         }
-        const fromDeviceKey = fromElement.deviceId ?? fromElement.id;
-        const toDeviceKey = toElement.deviceId ?? toElement.id;
+        const fromDeviceKey = getElementKey(fromElement);
+        const toDeviceKey = getElementKey(toElement);
         const exists = state.connections.some((connection) => {
           const fromKey = connection.fromDeviceId ?? connection.id;
           const toKey = connection.toDeviceId ?? connection.id;
@@ -739,13 +766,25 @@ export const useCanvasStore = create<CanvasState>()(
       set((state) => {
         const target = state.elements.find((element) => element.id === elementId);
         const targetKeys = target
-          ? [target.deviceId ?? target.id, target.id]
+          ? [
+              getElementKey(target),
+              target.deviceId,
+              target.deviceMac,
+              target.id
+            ].filter((value): value is string => Boolean(value))
           : [];
         if (target) {
-          const restoreId = (target.metadata?.sourceDeviceId as string | undefined) ?? target.deviceId ?? target.id;
+          const restoreId =
+            (target.metadata?.sourceDeviceId as string | undefined) ??
+            target.deviceId ??
+            target.id;
+          const restoreMac =
+            (target.metadata?.sourceDeviceMac as string | undefined) ?? target.deviceMac ?? null;
           if (restoreId) {
             const restored: DeviceSummary = {
               id: restoreId,
+              mac: restoreMac,
+              alias: (target.metadata?.sourceAlias as string | undefined) ?? null,
               name: target.name,
               type: target.type,
               ip: target.metadata?.ip as string | undefined,

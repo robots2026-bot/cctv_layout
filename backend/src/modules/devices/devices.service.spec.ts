@@ -6,7 +6,7 @@ import { DeviceEntity } from './entities/device.entity';
 import { LayoutEntity } from '../layouts/entities/layout.entity';
 import { LayoutVersionEntity } from '../layouts/entities/layout-version.entity';
 import type { RegisterDeviceDto } from './dto/register-device.dto';
-import type { UpdateDeviceDto } from './dto/update-device.dto';
+import type { RenameDeviceDto } from './dto/rename-device.dto';
 import { RealtimeService } from '../realtime/realtime.service';
 import type { ActivityLogService } from '../activity-log/activity-log.service';
 
@@ -14,6 +14,7 @@ type MockRepository<T extends ObjectLiteral> = Partial<Record<keyof Repository<T
 
 const createMockRepository = <T extends ObjectLiteral>() =>
 ({
+  create: jest.fn((entity: Partial<T>) => entity),
   find: jest.fn(),
   findOne: jest.fn(),
   save: jest.fn(),
@@ -104,6 +105,7 @@ describe('DevicesService unplaced device handling', () => {
           projectId,
           name: 'Cam A',
           type: 'Camera',
+          macAddress: 'aa:bb:cc:00:00:01',
           status: 'online',
           metadata: null,
           createdAt: new Date(),
@@ -118,14 +120,61 @@ describe('DevicesService unplaced device handling', () => {
 
       expect(result).toEqual(devices);
     });
+
+    it('filters using device mac addresses', async () => {
+      const devices: DeviceEntity[] = [
+        {
+          id: 'device-1',
+          projectId,
+          name: 'Cam A',
+          type: 'Camera',
+          macAddress: 'aa:bb:cc:dd:ee:01',
+          status: 'online',
+          metadata: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        } as DeviceEntity,
+        {
+          id: 'device-2',
+          projectId,
+          name: 'Cam B',
+          type: 'Camera',
+          macAddress: 'aa:bb:cc:dd:ee:02',
+          status: 'offline',
+          metadata: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        } as DeviceEntity
+      ];
+
+      devicesRepository.find?.mockResolvedValue(devices);
+      layoutsRepository.find?.mockResolvedValue([
+        { id: 'layout-1', projectId, currentVersionId: 'version-1' }
+      ]);
+      layoutVersionsRepository.find?.mockResolvedValue([
+        {
+          id: 'version-1',
+          layoutId: 'layout-1',
+          elementsJson: [
+            { id: 'el-1', deviceMac: 'aa:bb:cc:dd:ee:02' }
+          ]
+        }
+      ]);
+
+      const result = await service.listProjectDevices(projectId);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].macAddress).toBe('aa:bb:cc:dd:ee:01');
+    });
   });
 
-  describe('updateDevice', () => {
+  describe('renameDevice', () => {
     const baseDevice: DeviceEntity = {
-      id: 'device-placed',
+      id: 'device-1',
       projectId,
-      name: 'Placed Cam',
+      name: '设备A',
       type: 'Camera',
+      macAddress: 'aa:bb:cc:dd:ee:ff',
       status: 'online',
       metadata: null,
       createdAt: new Date(),
@@ -145,9 +194,9 @@ describe('DevicesService unplaced device handling', () => {
         }
       ]);
 
-      const payload: UpdateDeviceDto = { name: 'Updated' };
+      const payload: RenameDeviceDto = { name: 'Updated' };
 
-      await expect(service.updateDevice(projectId, baseDevice.id, payload)).rejects.toBeInstanceOf(
+      await expect(service.renameDevice(projectId, baseDevice.id, payload)).rejects.toBeInstanceOf(
         ConflictException
       );
     });
@@ -170,11 +219,12 @@ describe('DevicesService unplaced device handling', () => {
         updatedAt: new Date()
       }));
 
-      const payload: UpdateDeviceDto = { name: 'Updated Name', model: 'M200' };
+      const payload: RenameDeviceDto = { name: 'Updated Name' };
 
-      const result = await service.updateDevice(projectId, baseDevice.id, payload);
+      const result = await service.renameDevice(projectId, baseDevice.id, payload);
 
-      expect(result.name).toBe('Updated Name');
+      expect(result.alias).toBe('Updated Name');
+      expect(result.name).toBe(baseDevice.name);
       expect(devicesRepository.save).toHaveBeenCalled();
       expect(realtimeService.emitDeviceUpdate).toHaveBeenCalled();
       expect(activityLogService.record).toHaveBeenCalledWith(
@@ -184,6 +234,24 @@ describe('DevicesService unplaced device handling', () => {
         })
       );
     });
+
+    it('allows clearing alias', async () => {
+      devicesRepository.findOne?.mockResolvedValue({ ...baseDevice });
+      layoutsRepository.find?.mockResolvedValue([
+        { id: 'layout-1', projectId, currentVersionId: null }
+      ]);
+      layoutVersionsRepository.find?.mockResolvedValue([]);
+      devicesRepository.save?.mockImplementation(async (entity: DeviceEntity) => ({
+        ...entity,
+        alias: null,
+        updatedAt: new Date()
+      }));
+
+      const result = await service.renameDevice(projectId, baseDevice.id, { name: '   ' });
+
+      expect(result.alias).toBeNull();
+      expect(devicesRepository.save).toHaveBeenCalled();
+    });
   });
 
   describe('removeDevice', () => {
@@ -192,7 +260,7 @@ describe('DevicesService unplaced device handling', () => {
         id: 'device-in-use',
         projectId,
         name: 'Cam',
-        type: 'Camera',
+        type: 'Switch',
         status: 'online',
         metadata: null,
         createdAt: new Date(),
@@ -218,7 +286,7 @@ describe('DevicesService unplaced device handling', () => {
         id: 'device-unused',
         projectId,
         name: 'Cam',
-        type: 'Camera',
+        type: 'Switch',
         status: 'offline',
         metadata: null,
         createdAt: new Date(),
@@ -233,10 +301,19 @@ describe('DevicesService unplaced device handling', () => {
         { id: 'version-5', layoutId: 'layout-1', elementsJson: [{ deviceId: 'other' }] }
       ]);
 
+      devicesRepository.save?.mockImplementation(async (entity: DeviceEntity) => ({
+        ...entity,
+        hiddenAt: entity.hiddenAt ?? new Date(),
+        updatedAt: new Date()
+      }));
+
       await service.removeDevice(projectId, device.id);
 
-      expect(devicesRepository.remove).toHaveBeenCalledWith(device);
-      expect(realtimeService.emitDeviceRemoval).toHaveBeenCalledWith(projectId, device.id);
+      expect(devicesRepository.save).toHaveBeenCalled();
+      expect(devicesRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        hiddenAt: expect.any(Date)
+      }));
+      expect(realtimeService.emitDeviceRemoval).toHaveBeenCalledWith(projectId, device.id, device.macAddress ?? null);
       expect(activityLogService.record).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'device.delete',
@@ -255,6 +332,7 @@ describe('DevicesService unplaced device handling', () => {
         name: 'SyncCam',
         type: 'Camera',
         status: 'offline',
+        macAddress: 'aa:bb:cc:dd:ee:ff',
         metadata: null,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -271,13 +349,27 @@ describe('DevicesService unplaced device handling', () => {
         type: 'Camera',
         model: 'X1',
         ipAddress: '10.0.0.1',
-        status: 'online'
+        status: 'online',
+        macAddress: 'AA:BB:CC:DD:EE:FF'
       };
 
       const result = await service.registerOrUpdate(projectId, payload);
 
       expect(result.status).toBe('online');
       expect(devicesRepository.save).toHaveBeenCalled();
+      expect(result.macAddress).toBe('aa:bb:cc:dd:ee:ff');
+    });
+
+    it('requires mac address for non switch devices', async () => {
+      const payload: RegisterDeviceDto = {
+        type: 'Camera',
+        model: 'X1',
+        ipAddress: '10.0.0.1'
+      };
+
+      await expect(service.registerOrUpdate(projectId, payload)).rejects.toThrow(
+        '非交换机设备必须提供 MAC 地址'
+      );
     });
   });
 });

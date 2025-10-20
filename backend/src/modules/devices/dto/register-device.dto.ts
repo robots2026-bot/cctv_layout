@@ -1,4 +1,13 @@
-import { IsIP, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
+import {
+  IsIP,
+  IsIn,
+  IsMACAddress,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateIf
+} from 'class-validator';
 import { DeviceStatus } from '../entities/device.entity';
 
 export class RegisterDeviceDto {
@@ -19,6 +28,12 @@ export class RegisterDeviceDto {
   @IsIP()
   ipAddress?: string;
 
+  @ValidateIf((payload) => payload.type === 'Switch' ? Boolean(payload.macAddress) : true)
+  @IsOptional()
+  @IsString()
+  @IsMACAddress()
+  macAddress?: string;
+
   @IsString()
   @MaxLength(80)
   @IsOptional()
@@ -28,8 +43,4 @@ export class RegisterDeviceDto {
   @IsOptional()
   status?: DeviceStatus;
 
-  @ValidateIf((payload) => payload.type === 'Bridge')
-  @IsString()
-  @IsIn(['AP', 'ST'])
-  bridgeRole?: 'AP' | 'ST';
 }

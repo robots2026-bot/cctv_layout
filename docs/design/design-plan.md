@@ -50,7 +50,7 @@
 - **分层结构**：NestJS `modules` → `controllers`/`resolvers` → `services` → `repositories`/`integrations`，以依赖注入提升可测试性。
 - **核心模块职责**：
   1. `ProjectsModule`：项目 CRUD、成员与权限管理、操作日志落库；`GET /api/projects` 支持排序、通信 ID 区间与统计返回，`GET /api/projects/:id` 输出成员与近期布局摘要，若项目存在布局但未设默认布局会自动填充；其余 CRUD 接口沿用软删除/恢复语义，通过 `ProjectsGateway` 广播 `projects.updated` 同步侧边栏。
-  2. `DevicesModule`：对接扫描器（REST/消息队列），执行设备标准化、幂等写入、状态同步；统一维护未布局设备资源，后端依据各布局当前版本过滤已落位设备，并限制手动编辑/删除仅作用于未布局设备，防止画布数据失配。
+  2. `DevicesModule`：对接扫描器（REST/消息队列），执行设备标准化、幂等写入、状态同步；非交换机设备以 MAC 地址与项目 ID 形成唯一约束（数据库主键仍使用 UUID），设备新增仅来自网关。前端仅允许对未布局设备维护“别名”和执行“隐藏”动作：隐藏后记录 `hidden_at`，后续网关推送同一 MAC 会自动清除；别名为空时界面使用网关同步的原始名称。后端依据各布局当前版本过滤已落位或已隐藏的设备，防止画布数据失配。
   3. `LayoutsModule`：保存画布 JSON、维护版本链、处理冲突合并；首次创建布局时若项目无默认布局自动设为默认。
   4. `FilesModule`：处理背景图上传（S3 兼容存储）、生成缩略图、提供受控访问链接。
   5. `RealtimeGateway`：基于 `@nestjs/websockets`，统一管理房间订阅、事件广播、心跳检测。

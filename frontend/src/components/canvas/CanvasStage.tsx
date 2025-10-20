@@ -221,7 +221,7 @@ export const CanvasStage = () => {
       const dropPosition = { x: pointer.x, y: pointer.y };
 
       store.addDeviceToCanvas(device, dropPosition);
-      useRealtimeStore.getState().consumeDevice(device.id);
+      useRealtimeStore.getState().consumeDevice(device);
     };
 
     container.addEventListener('dragover', handleDragOver);

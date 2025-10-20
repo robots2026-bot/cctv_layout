@@ -41,6 +41,10 @@ class SaveLayoutElementDto {
   deviceId?: string | null;
 
   @IsOptional()
+  @IsString()
+  deviceMac?: string | null;
+
+  @IsOptional()
   @IsObject()
   metadata?: Record<string, unknown>;
 

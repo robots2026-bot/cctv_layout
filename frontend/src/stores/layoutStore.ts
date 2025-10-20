@@ -47,6 +47,7 @@ export const useLayoutStore = create<LayoutState>()(
         name: element.name,
         type: element.type,
         deviceId: element.deviceId ?? null,
+        deviceMac: element.deviceMac ?? null,
         metadata: element.metadata ?? {},
         position: element.position ?? { x: 0, y: 0 },
         size: element.size ?? { width: 150, height: 70 },

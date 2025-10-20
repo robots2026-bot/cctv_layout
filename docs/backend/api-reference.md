@@ -231,65 +231,31 @@
 
 ### 4.1 查询待布局设备
 - **Method**：GET `/projects/:projectId/devices`
-- **用途**：用于设备侧栏拉取未放置设备列表；服务端会聚合项目内所有布局的当前版本（`layouts.current_version_id`），过滤掉存在于任何布局节点 `elementsJson[*].deviceId` 的设备。
+- **用途**：用于设备侧栏拉取未放置设备列表；服务端会聚合项目内所有布局的当前版本（`layouts.current_version_id`），过滤掉存在于任何布局节点 `elementsJson[*].deviceId` 或 `elementsJson[*].deviceMac` 的设备，同时跳过已被手动隐藏 (`hidden_at` 非空) 的记录。
 - **响应** `200 OK`：
   ```json
   [
     {
       "id": "device-uuid",
+      "mac": "00-11-32-AA-BB-CC",
+      "alias": "西侧围栏摄像机1",
       "name": "1#塔吊摄像机",
       "type": "Camera",
       "model": "DS-2DE4225IW",
       "ip": "192.168.10.15",
-      "status": "online",
-      "bridgeRole": "AP"
+      "status": "online"
     }
   ]
   ```
 
-### 4.2 手动注册/更新设备
-- **Method**：POST `/projects/:projectId/devices/register`
-- **请求体**：
-  ```json
-  {
-    "name": "1#塔吊摄像机",         // 可为空，后端需允许
-    "type": "Camera",               // 必填，限定枚举：Camera|NVR|Bridge|Switch
-    "model": "DS-2DE4225IW",        // 必填，交换机默认 V600
-    "ipAddress": "192.168.10.15",   // Camera/NVR/Bridge 必填；Switch 可省略
-    "status": "unknown",            // 可选：online|offline|unknown
-    "bridgeRole": "AP"              // 仅 Bridge 类型传入 AP|ST
-  }
-  ```
-- **响应** `200 OK`：
-  ```json
-  {
-    "id": "device-uuid",
-    "name": "1#塔吊摄像机",
-    "type": "Camera",
-    "model": "DS-2DE4225IW",
-    "ipAddress": "192.168.10.15",
-    "status": "unknown",
-    "projectId": "uuid",
-    "metadata": { "model": "DS-2DE4225IW" }
-  }
-  ```
-- **行为**：
-  - 若 IP 已存在同项目，执行幂等更新。
-  - 保存后应通过实时通道 `device.update` 推送。
-
-### 4.3 编辑未布局设备
-- **Method**：PATCH `/projects/:projectId/devices/:deviceId`
-- **请求体**：与注册接口字段一致，全部可选。Bridge 类型如需调整角色必须传入 `bridgeRole`。
-- **响应** `200 OK`：返回更新后的设备摘要。
-- **约束**：
-  1. 仅允许编辑未布局设备；若设备已出现在任一布局当前版本中，返回 `409 Conflict`，`{ "error": "Conflict", "message": "Device <id> is already placed in a layout" }`。
-  2. 设备类型切换为 `Bridge` 时必须提供 `bridgeRole`。
-
-### 4.4 删除未布局设备
-- **Method**：DELETE `/projects/:projectId/devices/:deviceId`
-- **响应** `200 OK`：`{ "success": true }`
-- **约束**：同 4.3，仅允许删除未布局设备；设备已在布局内引用时返回 `409 Conflict`。
-- **行为**：删除成功后广播 `device.remove`，前端从未布局列表中移除。
+### 4.2 名称调整与隐藏
+- **Method**：
+  - PATCH `/projects/:projectId/devices/:deviceId` — `{ "name": "新名称" }`
+  - DELETE `/projects/:projectId/devices/:deviceId`
+- **说明**：
+  - 仅支持对“未布局”设备操作；若设备已出现在任一布局当前版本中，返回 `409 Conflict`。
+  - PATCH 用于调整列表展示名称；DELETE 不会物理删除设备，而是将 `hidden_at` 设置为当前时间并广播 `device.remove`（`{ id, mac }`）。
+  - 当网关后续再次推送同 MAC 的设备时，后端会自动清除 `hidden_at` 并重新出现在未布局列表中。
 
 ## 5. 实时通道（Socket.IO）
 
@@ -300,7 +266,7 @@
 ### 5.1 服务器向客户端事件
 | 事件名 | 触发场景 | Payload |
 |--------|----------|---------|
-| `device.update` | 设备状态/属性变更（注册、去重、心跳更新） | `{ id, name, type, model, ip, status }` |
+| `device.update` | 设备状态/属性变更（注册、去重、心跳更新） | `{ id, mac, alias, name, type, model, ip, status }` |
 | `presence.sync` | 项目成员在线状态同步 | `{ users: string[] }`（用户标识列表） |
 | `projects.updated` | 项目增删改、恢复 | `{ projectId, action: "created" \| "updated" \| "archived" \| "deleted" \| "restored" }` |
 | `layout.version` | 布局保存生成新版本 | `{ layoutId, versionId }` |
