@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Patch } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { DevicesService } from './devices.service';
 import { RenameDeviceDto } from './dto/rename-device.dto';
+import { RegisterSwitchDto } from './dto/register-switch.dto';
 import { DeviceEntity } from './entities/device.entity';
 
 @Controller('projects/:projectId/devices')
@@ -8,6 +9,10 @@ export class ProjectDevicesController {
   constructor(private readonly devicesService: DevicesService) {}
 
   private mapDevice(device: DeviceEntity) {
+    const metadata = (device.metadata ?? null) as Record<string, unknown> | null;
+    const rawBridgeRole = typeof metadata?.['bridgeRole'] === 'string' ? String(metadata.bridgeRole) : null;
+    const normalizedBridgeRole = rawBridgeRole ? rawBridgeRole.trim().toUpperCase() : null;
+    const bridgeRole = normalizedBridgeRole === 'AP' || normalizedBridgeRole === 'ST' ? normalizedBridgeRole : 'UNKNOWN';
     return {
       id: device.id,
       name: device.name,
@@ -19,7 +24,9 @@ export class ProjectDevicesController {
       model:
         typeof device.metadata?.model === 'string'
           ? (device.metadata.model as string)
-          : undefined
+          : undefined,
+      metadata,
+      bridgeRole
     };
   }
 
@@ -28,6 +35,11 @@ export class ProjectDevicesController {
     return this.devicesService
       .listProjectDevices(projectId)
       .then((devices) => devices.map((device) => this.mapDevice(device)));
+  }
+
+  @Post('register-switch')
+  registerSwitch(@Param('projectId') projectId: string, @Body() dto: RegisterSwitchDto) {
+    return this.devicesService.createSwitch(projectId, dto).then((device) => this.mapDevice(device));
   }
 
   @Patch(':deviceId')

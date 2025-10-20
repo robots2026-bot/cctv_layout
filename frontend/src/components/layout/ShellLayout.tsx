@@ -20,6 +20,9 @@ const ShellLayout = ({ children }: PropsWithChildren) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const isProjectManagementRoute = location.pathname.startsWith('/projects/manage');
+  const isGatewayMockRoute = location.pathname.startsWith('/device-sync/mock');
+  const isWorkbenchRoute = !isProjectManagementRoute && !isGatewayMockRoute;
+  const shouldShowProjectSidebar = !isProjectManagementRoute && !isGatewayMockRoute;
 
   useEffect(() => {
     if (!isLoading && projects.length === 0) {
@@ -50,7 +53,7 @@ const ShellLayout = ({ children }: PropsWithChildren) => {
           <div className="flex items-center gap-2">
             <Link
               to="/"
-              className={`rounded border px-3 py-1.5 text-xs font-medium transition hover:border-brand-400/80 hover:text-white ${!isProjectManagementRoute ? 'border-brand-400 text-white' : 'border-slate-700/70 bg-slate-900/60 text-slate-200'}`}
+              className={`rounded border px-3 py-1.5 text-xs font-medium transition hover:border-brand-400/80 hover:text-white ${isWorkbenchRoute ? 'border-brand-400 text-white' : 'border-slate-700/70 bg-slate-900/60 text-slate-200'}`}
             >
               布局工作台
             </Link>
@@ -59,6 +62,12 @@ const ShellLayout = ({ children }: PropsWithChildren) => {
               className={`rounded border px-3 py-1.5 text-xs font-medium transition hover:border-brand-400/80 hover:text-white ${isProjectManagementRoute ? 'border-brand-400 text-white' : 'border-slate-700/70 bg-slate-900/60 text-slate-200'}`}
             >
               项目管理
+            </Link>
+            <Link
+              to="/device-sync/mock"
+              className={`rounded border px-3 py-1.5 text-xs font-medium transition hover:border-brand-400/80 hover:text-white ${isGatewayMockRoute ? 'border-brand-400 text-white' : 'border-slate-700/70 bg-slate-900/60 text-slate-200'}`}
+            >
+              模拟网关
             </Link>
           </div>
           <span>
@@ -81,7 +90,7 @@ const ShellLayout = ({ children }: PropsWithChildren) => {
         </div>
       </header>
       <main className="flex flex-1 overflow-hidden">
-        {!isProjectManagementRoute && (
+        {shouldShowProjectSidebar && (
           <aside
             className={`flex flex-shrink-0 flex-col border-r border-slate-800 bg-slate-900/40 transition-all duration-200 ${
               isProjectSidebarCollapsed ? 'w-14' : 'w-72'

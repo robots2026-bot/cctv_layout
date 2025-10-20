@@ -257,6 +257,31 @@
   - PATCH 用于调整列表展示名称；DELETE 不会物理删除设备，而是将 `hidden_at` 设置为当前时间并广播 `device.remove`（`{ id, mac }`）。
   - 当网关后续再次推送同 MAC 的设备时，后端会自动清除 `hidden_at` 并重新出现在未布局列表中。
 
+### 4.3 手动注册交换机
+- **Method**：POST `/projects/:projectId/devices/register-switch`
+- **用途**：用于现场临时补录交换机（其它设备仍依赖网关同步）。
+- **请求体**：
+  ```json
+  {
+    "name": "施工区交换机01"
+  }
+  ```
+- **响应** `200 OK`：
+  ```json
+  {
+    "id": "device-uuid",
+    "projectId": "uuid",
+    "name": "施工区交换机01",
+    "alias": null,
+    "type": "Switch",
+    "mac": null,
+    "status": "unknown"
+  }
+  ```
+- **行为**：
+  - 新增交换机默认状态 `unknown`，`hidden_at = null`，可随后通过 PATCH/DELETE 编辑别名或隐藏。
+  - 若后续网关开始同步该交换机，可根据返回的 MAC 进行合并。
+
 ## 5. 实时通道（Socket.IO）
 
 - **连接地址**：`ws(s)://<host>:<port>`，`path = /realtime`。
@@ -308,7 +333,8 @@
         "ip": "10.0.1.1",
         "statuses": ["online", "signal-weak"],
         "latencyMs": 42,
-        "packetLoss": 0.3
+        "packetLoss": 0.3,
+        "bridgeRole": "AP"
       }
     ]
   }
@@ -320,6 +346,7 @@
 - 额外指标（可选）：
   - `latencyMs`：往返延迟毫秒数（Number）。
   - `packetLoss`：丢包率百分比（0-100 的 Number 或 0-1 小数）。
+  - `bridgeRole`：网桥角色（`AP`/`ST`），仅对 `type=Bridge` 生效；若缺省则沿用上一轮同步或标记为未知。
   - 其它指标（如 RSSI、电压）可放入 `metrics` 对象，由后端原样入库。
 - **成功响应** `200 OK`：
   ```json
@@ -337,8 +364,8 @@
    - 使用 `(projectId, mac)` 去重匹配；网关保证提供唯一且稳定的 `mac`，不再退回使用其它字段。
    - `type`、`model` 在同一 `mac` 上视为稳定属性，如发生变化视为设备替换：更新前记录历史值并写入 `activity_log`（action=`device.model_changed`），便于审计。
    - 调用 `devicesService.registerOrUpdate` 更新字段：`name/type/model/ip/status`、`lastSeenAt`，并存储 `gatewayMac`、`gatewayIp` 及采样时间。
-   - `statuses[0]` 写入主状态（白名单：`online|offline|warning|unknown`），多余标签存入 `metadata.extraStatuses`。
-   - 将延迟/丢包等指标记录到 `metadata.metrics`，并同步更新时间戳、网关信息：
+  - `statuses[0]` 写入主状态（白名单：`online|offline|warning|unknown`），多余标签存入 `metadata.extraStatuses`。
+  - 将延迟/丢包等指标记录到 `metadata.metrics`，并同步更新时间戳、网关信息：
      ```json
     {
       "extraStatuses": ["signal-weak"],
@@ -348,6 +375,7 @@
       "scannedAt": "2025-10-18T02:05:32Z"
     }
      ```
+   - 对于网桥设备（`type=Bridge`），通过 `bridgeRole`/`mode`/名称等字段判定 AP/ST，并写入 `metadata.bridgeRole`，后续未布局面板与画布均按此展示角色徽章。
 3. 每台设备成功后调用 `realtimeService.emitDeviceUpdate`，前端未布局列表即时刷新；同步标记本次快照中出现过的设备 ID。
 4. 快照处理结束后，对未出现在本次快照中的设备，将其状态置为 `offline` 并同样广播（可配置是否立即下线或保留一定阈值）。
 4. 可选：写入 `activity_log`，action=`device.sync`，便于审计。
@@ -355,6 +383,7 @@
 ### 7.3 错误处理
 - 项目不存在：记录 `warn` 并回传 `failed` 列表。
 - 单条设备写库失败：捕获异常后继续处理剩余设备，最终一次性返回处理结果。
+- 网关 MAC 非法：直接返回 `400 Bad Request`，前端需提示重新确认网关配置。
 
 ### 7.4 后续增强（计划）
 - 接入平台签名校验、频率控制。

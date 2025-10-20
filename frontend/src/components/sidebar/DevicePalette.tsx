@@ -13,6 +13,7 @@ import {
   getDeviceTypeVisual,
   getStatusVisual
 } from '../../utils/deviceVisual';
+import { resolveBridgeRole } from '../../utils/bridgeRole';
 
 type ManualDeviceForm = {
   name: string;
@@ -86,9 +87,10 @@ const DeviceListIcon = ({
 };
 
 export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
-  const { availableDevices, fetchAvailableDevices, updateDeviceName, deleteDevice } = useRealtimeStore((state) => ({
+  const { availableDevices, fetchAvailableDevices, registerSwitch, updateDeviceName, deleteDevice } = useRealtimeStore((state) => ({
     availableDevices: state.availableDevices,
     fetchAvailableDevices: state.fetchAvailableDevices,
+    registerSwitch: state.registerSwitch,
     updateDeviceName: state.updateDeviceName,
     deleteDevice: state.deleteDevice
   }));
@@ -226,8 +228,23 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
         return;
       }
     } else {
-      setIsSubmitting(false);
-      return;
+      if (!trimmedName) {
+        setSubmitError('请填写交换机名称');
+        setIsSubmitting(false);
+        return;
+      }
+      const created = await registerSwitch(projectId, { name: trimmedName });
+      if (!created) {
+        setSubmitError('交换机创建失败，请稍后重试');
+        setIsSubmitting(false);
+        return;
+      }
+      addNotification({
+        id: createNotificationId(),
+        title: '交换机已创建',
+        message: '新交换机已加入未布局设备列表。',
+        level: 'info'
+      });
     }
 
     setIsSubmitting(false);
@@ -348,8 +365,19 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-slate-200">未布局设备资源</h2>
-            <p className="mt-1 text-xs text-slate-500">设备由网关同步，支持在此调整名称或暂时隐藏。</p>
+            <p className="mt-1 text-xs text-slate-500">网关同步设备的基础信息，可手动添加交换机或维护别名。</p>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              resetManualState();
+              setIsManualDialogOpen(true);
+            }}
+            disabled={!projectId}
+            className="inline-flex items-center gap-1 rounded border border-brand-500/40 bg-brand-500/10 px-2 py-1 text-xs font-medium text-brand-200 transition hover:border-brand-400/70 hover:bg-brand-500/20 hover:text-brand-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            手动添加交换机
+          </button>
         </div>
       </div>
       <div className="border-b border-slate-800/80 px-3 py-2">
@@ -384,6 +412,11 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
             const category = getDeviceCategory(device.type);
             const status = getStatusVisual(device.status);
             const typeVisual = getDeviceTypeVisual(device.type);
+            const metadata = (device.metadata ?? null) as Record<string, unknown> | null;
+            const bridgeRole =
+              category === 'bridge'
+                ? resolveBridgeRole(metadata ?? undefined, device.name)
+                : 'UNKNOWN';
             const alias = device.alias?.trim();
             const deviceName = alias && alias.length > 0 ? alias : device.name?.trim() ? device.name : typeVisual.label;
             return (
@@ -394,6 +427,7 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
                   status={status}
                   typeVisual={typeVisual}
                   deviceName={deviceName}
+                  bridgeRole={bridgeRole}
                   onDragStart={handleDragStart}
                   onContextMenu={handleDeviceContextMenu}
                 />
@@ -434,6 +468,7 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
         onSubmit={handleManualSubmit}
         isSubmitting={isSubmitting}
         errorMessage={submitError}
+        mode={editingDeviceId ? 'edit' : 'create'}
       />
     </div>
   );
@@ -447,6 +482,7 @@ interface ManualDeviceDialogProps {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   isSubmitting: boolean;
   errorMessage: string | null;
+  mode: 'create' | 'edit';
 }
 
 const DevicePaletteItem = ({
@@ -455,6 +491,7 @@ const DevicePaletteItem = ({
   status,
   typeVisual,
   deviceName,
+  bridgeRole,
   onDragStart,
   onContextMenu
 }: {
@@ -463,9 +500,23 @@ const DevicePaletteItem = ({
   status: ReturnType<typeof getStatusVisual>;
   typeVisual: ReturnType<typeof getDeviceTypeVisual>;
   deviceName: string;
+  bridgeRole: 'AP' | 'ST' | 'UNKNOWN';
   onDragStart: (event: DragEvent<HTMLDivElement>, device: DeviceSummary) => void;
   onContextMenu: (event: MouseEvent<HTMLDivElement>, device: DeviceSummary) => void;
 }) => {
+  const bridgeBadgeStyles =
+    bridgeRole === 'AP'
+      ? {
+          borderColor: '#34d399',
+          color: '#bbf7d0',
+          backgroundColor: 'rgba(52, 211, 153, 0.18)'
+        }
+      : {
+          borderColor: '#f97316',
+          color: '#fed7aa',
+          backgroundColor: 'rgba(249, 115, 22, 0.18)'
+        };
+
   return (
     <div
       draggable
@@ -489,17 +540,27 @@ const DevicePaletteItem = ({
           >
             {deviceName}
           </span>
-          <span
-            className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-            style={{
-              borderColor: category === 'switch' ? '#38bdf8' : typeVisual.accent,
-              color: category === 'switch' ? '#dbeafe' : typeVisual.text,
-              backgroundColor:
-                category === 'switch' ? 'rgba(59, 130, 246, 0.2)' : typeVisual.background
-            }}
-          >
-            {typeVisual.label}
-          </span>
+          <div className="flex shrink-0 items-center gap-1">
+            {category === 'bridge' && bridgeRole !== 'UNKNOWN' && (
+              <span
+                className="rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                style={bridgeBadgeStyles}
+              >
+                {bridgeRole}
+              </span>
+            )}
+            <span
+              className="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+              style={{
+                borderColor: category === 'switch' ? '#38bdf8' : typeVisual.accent,
+                color: category === 'switch' ? '#dbeafe' : typeVisual.text,
+                backgroundColor:
+                  category === 'switch' ? 'rgba(59, 130, 246, 0.2)' : typeVisual.background
+              }}
+            >
+              {typeVisual.label}
+            </span>
+          </div>
         </div>
         <div className="flex flex-col text-[11px]" style={{ color: status.secondaryTextColor }}>
           <span className="truncate">MAC：{device.mac ? device.mac.toUpperCase() : '—'}</span>
@@ -522,7 +583,8 @@ const ManualDeviceDialog = ({
   onChange,
   onSubmit,
   isSubmitting,
-  errorMessage
+  errorMessage,
+  mode
 }: ManualDeviceDialogProps) => (
   <Transition show={open} as={Fragment}>
     <Dialog onClose={onClose} className="relative z-50">
@@ -549,9 +611,13 @@ const ManualDeviceDialog = ({
           leaveTo="translate-x-full"
         >
           <Dialog.Panel className="flex h-full w-full max-w-md flex-col border-l border-slate-800 bg-slate-950/95 p-6 shadow-2xl">
-            <Dialog.Title className="text-lg font-semibold text-white">编辑设备别名</Dialog.Title>
+            <Dialog.Title className="text-lg font-semibold text-white">
+              {mode === 'edit' ? '编辑设备别名' : '手动添加交换机'}
+            </Dialog.Title>
             <Dialog.Description className="mt-1 text-xs text-slate-400">
-              调整未布局设备在列表中的显示别名；别名留空时使用网关同步的原始名称。
+              {mode === 'edit'
+                ? '调整未布局设备在列表中的显示别名；别名留空时使用网关同步的原始名称。'
+                : '仅支持新增交换机，填写名称后即可出现在未布局列表中。'}
             </Dialog.Description>
 
             <form
@@ -560,14 +626,19 @@ const ManualDeviceDialog = ({
             >
               <label className="flex flex-col gap-2">
                 <span className="text-xs font-medium text-slate-300">
-                  设备别名
+                  {mode === 'edit' ? '设备别名' : '交换机名称'} {mode === 'create' && <span className="text-rose-300">*</span>}
                 </span>
                 <input
                   value={form.name}
                   onChange={(event) => onChange({ ...form, name: event.target.value })}
                   maxLength={120}
-                  placeholder="例如：西侧围栏摄像机1（留空则显示网关名称）"
+                  placeholder={
+                    mode === 'edit'
+                      ? '例如：西侧围栏摄像机1（留空则显示网关名称）'
+                      : '例如：施工区交换机01'
+                  }
                   className="w-full rounded border border-slate-800/80 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-brand-400/80 focus:outline-none"
+                  required={mode === 'create'}
                 />
               </label>
 
@@ -591,7 +662,7 @@ const ManualDeviceDialog = ({
                   disabled={isSubmitting}
                   className="inline-flex items-center justify-center rounded border border-brand-500/70 bg-brand-500/20 px-3 py-2 text-xs font-semibold text-brand-100 transition hover:border-brand-400/80 hover:bg-brand-500/30 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isSubmitting ? '保存中...' : '保存名称'}
+                  {isSubmitting ? '保存中...' : mode === 'edit' ? '保存别名' : '创建交换机'}
                 </button>
               </div>
             </form>

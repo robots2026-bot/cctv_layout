@@ -22,6 +22,7 @@
   - [frontend/canvas-resize-sync.md](frontend/canvas-resize-sync.md)
   - [frontend/connection-design.md](frontend/connection-design.md)
   - [frontend/device-visuals.md](frontend/device-visuals.md)
+  - [frontend/device-sync-mock.md](frontend/device-sync-mock.md)
   - [frontend/focus-all-elements.md](frontend/focus-all-elements.md)
   - [frontend/infinite-canvas.md](frontend/infinite-canvas.md)
   - [frontend/manual-device-entry.md](frontend/manual-device-entry.md)

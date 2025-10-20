@@ -418,20 +418,33 @@ export const useCanvasStore = create<CanvasState>()(
     },
     addDeviceToCanvas: (device, position) => {
       set((state) => {
+        const baseMetadata = (device.metadata ?? null) as Record<string, unknown> | null;
+        const metadata: Record<string, unknown> = {
+          ...(baseMetadata ?? {})
+        };
+        if (device.ip !== undefined) {
+          metadata.ip = device.ip;
+        }
+        if (device.status !== undefined) {
+          metadata.status = device.status;
+        }
+        if (device.model !== undefined) {
+          metadata.model = device.model;
+        }
+        if (device.bridgeRole && device.bridgeRole !== 'UNKNOWN') {
+          metadata.bridgeRole = device.bridgeRole;
+        }
+        metadata.sourceDeviceId = device.id;
+        metadata.sourceDeviceMac = device.mac ?? null;
+        metadata.sourceAlias = device.alias ?? null;
+
         const newElement: CanvasElement = {
           id: nanoid(),
           name: device.alias?.trim() && device.alias.trim().length > 0 ? device.alias.trim() : device.name,
           type: device.type,
           deviceId: device.id,
           deviceMac: device.mac ?? null,
-          metadata: {
-            ip: device.ip,
-            status: device.status,
-            model: device.model,
-            sourceDeviceId: device.id,
-            sourceDeviceMac: device.mac ?? null,
-            sourceAlias: device.alias ?? null
-          },
+          metadata,
           position: position ?? { x: 50, y: 50 },
           size: { width: 150, height: 70 },
           selected: false
@@ -781,6 +794,11 @@ export const useCanvasStore = create<CanvasState>()(
           const restoreMac =
             (target.metadata?.sourceDeviceMac as string | undefined) ?? target.deviceMac ?? null;
           if (restoreId) {
+            const metadata = (target.metadata ?? null) as Record<string, unknown> | null;
+            const bridgeRole =
+              target.type === 'Bridge'
+                ? resolveBridgeRole(metadata ?? undefined, target.name)
+                : 'UNKNOWN';
             const restored: DeviceSummary = {
               id: restoreId,
               mac: restoreMac,
@@ -791,7 +809,9 @@ export const useCanvasStore = create<CanvasState>()(
               model: target.metadata?.model as string | undefined,
               status:
                 (target.metadata?.status as DeviceSummary['status']) ??
-                ('unknown' as DeviceSummary['status'])
+                ('unknown' as DeviceSummary['status']),
+              metadata,
+              bridgeRole
             };
             useRealtimeStore.getState().restoreDevice(restored);
           }

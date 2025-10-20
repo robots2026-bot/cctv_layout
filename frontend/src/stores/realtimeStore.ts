@@ -6,6 +6,7 @@ import { DeviceSummary } from '../types/canvas';
 import { useCanvasStore } from './canvasStore';
 import { useProjectStore } from './projectStore';
 import { useProjectManagementStore } from './projectManagementStore';
+import { resolveBridgeRole } from '../utils/bridgeRole';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
@@ -25,6 +26,12 @@ interface RealtimeState {
   connect: () => void;
   disconnect: () => void;
   fetchAvailableDevices: (projectId: string) => Promise<void>;
+  registerSwitch: (
+    projectId: string,
+    payload: {
+      name: string;
+    }
+  ) => Promise<DeviceSummary | null>;
   updateDeviceName: (
     projectId: string,
     deviceId: string,
@@ -97,15 +104,71 @@ export const useRealtimeStore = create<RealtimeState>()(
         const response = await apiClient.get<DeviceSummary[]>(`/projects/${projectId}/devices`);
         const placedKeys = getPlacedKeys();
         const filtered = response.data
-          .map((device) => ({
-            ...device,
-            mac: device.mac ?? null,
-            alias: device.alias ?? null
-          }))
+          .map((device) => {
+            const metadata = (device.metadata ?? null) as Record<string, unknown> | null;
+            const bridgeRole =
+              device.bridgeRole ??
+              (device.type === 'Bridge'
+                ? resolveBridgeRole(metadata ?? undefined, device.name)
+                : 'UNKNOWN');
+            return {
+              ...device,
+              mac: device.mac ?? null,
+              alias: device.alias ?? null,
+              metadata,
+              bridgeRole
+            };
+          })
           .filter((device) => !placedKeys.has(getDeviceKey(device)));
         set({ availableDevices: filtered });
       } catch (error) {
         console.error('获取可用设备失败', error);
+      }
+    },
+    registerSwitch: async (projectId, payload) => {
+      try {
+        const normalizedName = payload.name.trim();
+        if (!normalizedName) {
+          throw new Error('请填写交换机名称');
+        }
+
+        const response = await apiClient.post<DeviceSummary>(
+          `/projects/${projectId}/devices/register-switch`,
+          {
+            name: normalizedName
+          }
+        );
+        const summary = response.data;
+        const metadata = (summary.metadata ?? null) as Record<string, unknown> | null;
+        const bridgeRole =
+          summary.bridgeRole ??
+          (summary.type === 'Bridge'
+            ? resolveBridgeRole(metadata ?? undefined, summary.name)
+            : 'UNKNOWN');
+        const normalizedSummary: DeviceSummary = {
+          ...summary,
+          mac: summary.mac ?? null,
+          alias: summary.alias ?? null,
+          metadata,
+          bridgeRole
+        };
+
+        set((state) => ({
+          availableDevices: state.availableDevices.some(
+            (item) => getDeviceKey(item) === getDeviceKey(normalizedSummary)
+          )
+            ? state.availableDevices.map((item) =>
+                getDeviceKey(item) === getDeviceKey(normalizedSummary)
+                  ? normalizedSummary
+                  : item
+              )
+            : [...state.availableDevices, normalizedSummary]
+        }));
+
+        return normalizedSummary;
+      } catch (error) {
+        console.error('手动创建交换机失败', error);
+        return null;
       }
     },
     updateDeviceName: async (projectId, deviceId, payload) => {
@@ -117,10 +180,18 @@ export const useRealtimeStore = create<RealtimeState>()(
           }
         );
         const summary = response.data;
+        const metadata = (summary.metadata ?? null) as Record<string, unknown> | null;
+        const bridgeRole =
+          summary.bridgeRole ??
+          (summary.type === 'Bridge'
+            ? resolveBridgeRole(metadata ?? undefined, summary.name)
+            : 'UNKNOWN');
         const normalizedSummary: DeviceSummary = {
           ...summary,
           mac: summary.mac ?? null,
-          alias: summary.alias ?? null
+          alias: summary.alias ?? null,
+          metadata,
+          bridgeRole
         };
         set((state) => ({
           availableDevices: state.availableDevices.map((device) =>
@@ -163,20 +234,33 @@ export const useRealtimeStore = create<RealtimeState>()(
     },
     restoreDevice: (device) => {
       set((state) => {
+        const metadata = (device.metadata ?? null) as Record<string, unknown> | null;
+        const bridgeRole =
+          device.bridgeRole ??
+          (device.type === 'Bridge'
+            ? resolveBridgeRole(metadata ?? undefined, device.name)
+            : 'UNKNOWN');
+        const normalized: DeviceSummary = {
+          ...device,
+          mac: device.mac ?? null,
+          alias: device.alias ?? null,
+          metadata,
+          bridgeRole
+        };
         const exists = state.availableDevices.some(
-          (item) => getDeviceKey(item) === getDeviceKey(device)
+          (item) => getDeviceKey(item) === getDeviceKey(normalized)
         );
         if (exists) {
           return {
             availableDevices: state.availableDevices.map((item) =>
-              getDeviceKey(item) === getDeviceKey(device)
-                ? { ...item, ...device, alias: device.alias ?? null }
+              getDeviceKey(item) === getDeviceKey(normalized)
+                ? normalized
                 : item
             )
           };
         }
         return {
-          availableDevices: [...state.availableDevices, { ...device, alias: device.alias ?? null }]
+          availableDevices: [...state.availableDevices, normalized]
         };
       });
     },
@@ -197,10 +281,18 @@ export const useRealtimeStore = create<RealtimeState>()(
         case 'device.update': {
           set((state) => {
             const placedKeys = getPlacedKeys();
+            const metadata = (message.payload.metadata ?? null) as Record<string, unknown> | null;
+            const bridgeRole =
+              message.payload.bridgeRole ??
+              (message.payload.type === 'Bridge'
+                ? resolveBridgeRole(metadata ?? undefined, message.payload.name)
+                : 'UNKNOWN');
             const normalized: DeviceSummary = {
               ...message.payload,
               mac: message.payload.mac ?? null,
-              alias: message.payload.alias ?? null
+              alias: message.payload.alias ?? null,
+              metadata,
+              bridgeRole
             };
             if (placedKeys.has(getDeviceKey(normalized))) {
               return {};

@@ -9,6 +9,7 @@
 - **项目 (projects)**：保留现有结构，通信 ID (`code`) 唯一。
 - **设备 (devices)**：
   - 增加 `mac_address`（唯一）、`metadata.metrics`（延迟、丢包等）、`metadata.extraStatuses`。
+  - `metadata.bridgeRole` 保存网桥 AP/ST 角色，供未布局列表及画布渲染徽章。
   - 仍以 `project_id` 关联项目，网关切换时设备不丢失。
 - **网关绑定 (gateway_bindings)**（新表）：
   - 字段示例：`gateway_id`、`project_id`、`project_code`、`status`、`bound_at`、`changed_at`、`updated_by`。
@@ -32,7 +33,8 @@
           "ip": "10.0.1.1",
           "statuses": ["online", "signal-weak"],
           "latencyMs": 42,
-          "packetLoss": 0.3
+          "packetLoss": 0.3,
+          "bridgeRole": "AP"
         }
       ]
     }
@@ -46,7 +48,7 @@
 3. 遍历设备列表：
    - 以 `(project_id, mac)` 去重匹配；网关保证 `mac` 必填。
    - `type`/`model` 变化视为设备替换：覆盖数据前记录旧值到 `metadata.previousModel`，写 `activity_log`（`device.model_changed`）。
-   - 更新字段：`name/type/model/ip/status`、`lastSeenAt`、`metadata.metrics`、`metadata.extraStatuses`、`gatewayMac`、`gatewayIp`、`scannedAt`。
+   - 更新字段：`name/type/model/ip/status`、`lastSeenAt`、`metadata.metrics`、`metadata.extraStatuses`、`gatewayMac`、`gatewayIp`、`scannedAt`；对于网桥设备，根据 `bridgeRole`/`mode`/名称等提示写入 `metadata.bridgeRole`，区分 AP 和 ST。
    - 调用 `realtimeService.emitDeviceUpdate` 推送前端。
 4. 快照结束后，将本次未出现的设备状态标记为 `offline` 并推送。
 5. 记录操作日志（`activity_log` action=`device.sync`）。
@@ -56,7 +58,7 @@
 - 离线后重新推送时若绑定不一致 → 拒绝请求 + 告警，提示需要重新绑定。
 
 ## 6. 前端配合要点
-- 继续监听 `device.update`，根据 `status` + `metadata.extraStatuses` 渲染未布局列表和画布节点。
+- 继续监听 `device.update`，根据 `status` + `metadata.extraStatuses` 渲染未布局列表和画布节点；当 `metadata.bridgeRole` 存在时，未布局面板与节点图标展示 AP/ST 徽章。
 - 布局/项目界面可展示“网关离线/绑定异常”提示（后端提供状态接口）。
 
 ## 7. 初期简化实现

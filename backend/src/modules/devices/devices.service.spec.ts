@@ -52,6 +52,37 @@ describe('DevicesService unplaced device handling', () => {
     );
   });
 
+  describe('createSwitch', () => {
+    it('creates a switch with unknown status and emits update', async () => {
+      devicesRepository.create?.mockImplementation((entity: Partial<DeviceEntity>) => ({
+        ...entity
+      }) as DeviceEntity);
+      devicesRepository.save?.mockImplementation(async (entity: DeviceEntity) => ({
+        ...entity,
+        id: 'switch-created',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }));
+
+      const result = await service.createSwitch(projectId, { name: '施工区交换机01' });
+
+      expect(result.type).toBe('Switch');
+      expect(result.alias).toBeNull();
+      expect(result.macAddress).toBeNull();
+      expect(result.status).toBe('unknown');
+      expect(realtimeService.emitDeviceUpdate).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'switch-created'
+      }));
+      expect(activityLogService.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'device.create',
+          projectId,
+          details: expect.objectContaining({ deviceId: 'switch-created', type: 'Switch' })
+        })
+      );
+    });
+  });
+
   describe('listProjectDevices', () => {
     it('filters out devices that are already placed in any layout version', async () => {
       const devices: DeviceEntity[] = [

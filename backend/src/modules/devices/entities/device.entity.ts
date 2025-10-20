@@ -9,7 +9,7 @@ import {
 } from 'typeorm';
 import { ProjectEntity } from '../../projects/entities/project.entity';
 
-export type DeviceStatus = 'online' | 'offline' | 'unknown';
+export type DeviceStatus = 'online' | 'offline' | 'unknown' | 'warning';
 
 @Entity({ name: 'devices' })
 @Index('uq_devices_project_mac', ['projectId', 'macAddress'], {
@@ -29,17 +29,17 @@ export class DeviceEntity {
   @Column({ length: 120 })
   name!: string;
 
-@Column({ length: 60 })
-type!: string;
+  @Column({ length: 60 })
+  type!: string;
 
-@Column({ name: 'alias', type: 'varchar', length: 120, nullable: true })
-alias?: string | null;
+  @Column({ name: 'alias', type: 'varchar', length: 120, nullable: true })
+  alias?: string | null;
 
-@Column({ name: 'mac_address', type: 'varchar', length: 32, nullable: true })
-macAddress?: string | null;
+  @Column({ name: 'mac_address', type: 'varchar', length: 32, nullable: true })
+  macAddress?: string | null;
 
-@Column({ name: 'ip_address', type: 'varchar', nullable: true, length: 45 })
-ipAddress?: string | null;
+  @Column({ name: 'ip_address', type: 'varchar', nullable: true, length: 45 })
+  ipAddress?: string | null;
 
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, unknown> | null;

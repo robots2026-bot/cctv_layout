@@ -6,6 +6,7 @@ import ShellLayout from './components/layout/ShellLayout';
 import { useRealtimeConnection } from './hooks/useRealtimeConnection';
 import WorkbenchRedirect from './pages/WorkbenchRedirect';
 import ProjectWithoutLayout from './pages/ProjectWithoutLayout';
+import GatewayMock from './pages/GatewayMock';
 
 const App = () => {
   useRealtimeConnection();
@@ -18,6 +19,7 @@ const App = () => {
           <Route path="/projects/manage" element={<ProjectManagement />} />
           <Route path="/projects/:projectId" element={<ProjectWithoutLayout />} />
           <Route path="/projects/:projectId/layouts/:layoutId" element={<LayoutWorkbench />} />
+          <Route path="/device-sync/mock" element={<GatewayMock />} />
         </Routes>
       </Suspense>
     </ShellLayout>

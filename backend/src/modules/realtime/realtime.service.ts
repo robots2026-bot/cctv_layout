@@ -18,6 +18,10 @@ export class RealtimeService {
     }
     const model =
       typeof device.metadata?.model === 'string' ? (device.metadata?.model as string) : undefined;
+    const metadata = (device.metadata ?? null) as Record<string, unknown> | null;
+    const rawBridgeRole = typeof metadata?.['bridgeRole'] === 'string' ? String(metadata.bridgeRole) : null;
+    const normalizedBridgeRole = rawBridgeRole ? rawBridgeRole.trim().toUpperCase() : null;
+    const bridgeRole = normalizedBridgeRole === 'AP' || normalizedBridgeRole === 'ST' ? normalizedBridgeRole : undefined;
     this.server.to(`project:${device.projectId}`).emit('device.update', {
       id: device.id,
       alias: device.alias ?? null,
@@ -26,7 +30,9 @@ export class RealtimeService {
       type: device.type,
       ip: device.ipAddress,
       status: device.status,
-      model
+      model,
+      metadata,
+      bridgeRole
     });
   }
 

@@ -9,11 +9,18 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { DeviceEntity } from './entities/device.entity';
 import { RegisterDeviceDto } from './dto/register-device.dto';
+import { RegisterSwitchDto } from './dto/register-switch.dto';
 import { RenameDeviceDto } from './dto/rename-device.dto';
 import { RealtimeService } from '../realtime/realtime.service';
 import { ActivityLogService } from '../activity-log/activity-log.service';
 import { LayoutEntity } from '../layouts/entities/layout.entity';
 import { LayoutVersionEntity } from '../layouts/entities/layout-version.entity';
+
+interface RegisterOrUpdateContext {
+  metadataPatch?: Record<string, unknown> | null;
+  lastSeenAt?: Date | null;
+  source?: 'sync' | 'manual';
+}
 
 @Injectable()
 export class DevicesService {
@@ -29,6 +36,37 @@ export class DevicesService {
     private readonly realtimeService: RealtimeService,
     private readonly activityLogService: ActivityLogService
   ) {}
+
+  private mergeMetadata(
+    existing: Record<string, unknown> | null | undefined,
+    model: string | undefined,
+    patch?: Record<string, unknown> | null
+  ): Record<string, unknown> | null {
+    const next: Record<string, unknown> = { ...(existing ?? {}) };
+
+    if (model && model.length > 0) {
+      next.model = model;
+    } else if ((!model || model.length === 0) && 'model' in next) {
+      delete next.model;
+    }
+
+    if (patch === null) {
+      const keepModel = 'model' in next ? { model: next.model } : {};
+      return Object.keys(keepModel).length > 0 ? (keepModel as Record<string, unknown>) : null;
+    }
+
+    if (patch) {
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === null) {
+          delete next[key];
+        } else {
+          next[key] = value;
+        }
+      }
+    }
+
+    return Object.keys(next).length > 0 ? next : null;
+  }
 
   async listProjectDevices(projectId: string): Promise<DeviceEntity[]> {
     const devices = await this.devicesRepository.find({ where: { projectId } });
@@ -55,7 +93,11 @@ export class DevicesService {
     });
   }
 
-  async registerOrUpdate(projectId: string, payload: RegisterDeviceDto): Promise<DeviceEntity> {
+  async registerOrUpdate(
+    projectId: string,
+    payload: RegisterDeviceDto,
+    context: RegisterOrUpdateContext = {}
+  ): Promise<DeviceEntity> {
     const trimmedType = payload.type.trim();
     const normalizedType =
       trimmedType === 'Camera' || trimmedType === 'NVR' || trimmedType === 'Bridge' || trimmedType === 'Switch'
@@ -64,16 +106,18 @@ export class DevicesService {
     const trimmedIp = payload.ipAddress?.trim();
     const trimmedName = payload.name?.trim();
     const trimmedModel = payload.model?.trim();
+    const sanitizedModel = trimmedModel && trimmedModel.length > 0 ? trimmedModel : undefined;
     const normalizedMac = payload.macAddress?.trim().toLowerCase() ?? null;
 
     const sanitizedIp = trimmedIp && trimmedIp.length > 0 ? trimmedIp : null;
     const sanitizedMac = normalizedMac && normalizedMac.length > 0 ? normalizedMac : null;
+    const snapshotSeenAt = context.lastSeenAt ?? new Date();
 
     const baseName =
       trimmedName && trimmedName.length > 0
         ? trimmedName
-        : trimmedModel && trimmedModel.length > 0
-          ? `${normalizedType}-${trimmedModel}`
+        : sanitizedModel
+          ? `${normalizedType}-${sanitizedModel}`
           : sanitizedIp
             ? `${normalizedType}-${sanitizedIp}`
             : `${normalizedType}-${new Date().getTime().toString(36)}`;
@@ -106,23 +150,19 @@ export class DevicesService {
       trimmedName && trimmedName.length > 0 ? trimmedName : existing?.name ?? baseName;
 
     if (existing) {
-      const metadata = { ...(existing.metadata ?? {}) } as Record<string, unknown>;
-      if (trimmedModel) {
-        metadata.model = trimmedModel;
-      }
+      const rawPreviousModel = existing.metadata?.['model'];
+      const previousModel = typeof rawPreviousModel === 'string' ? rawPreviousModel : null;
       if (sanitizedMac) {
         existing.macAddress = sanitizedMac;
       }
       existing.hiddenAt = null;
-      this.logger.debug(`Updating device ${existing.id} from sync payload`);
-      Object.assign(existing, {
-        name: effectiveName,
-        type: normalizedType,
-        ipAddress: sanitizedIp,
-        status: desiredStatus,
-        lastSeenAt: new Date(),
-        metadata: Object.keys(metadata).length > 0 ? metadata : null
-      });
+      this.logger.debug(`Updating device ${existing.id} from ${context.source ?? 'manual'} payload`);
+      existing.name = effectiveName;
+      existing.type = normalizedType;
+      existing.ipAddress = sanitizedIp;
+      existing.status = desiredStatus;
+      existing.lastSeenAt = snapshotSeenAt;
+      existing.metadata = this.mergeMetadata(existing.metadata, sanitizedModel, context.metadataPatch);
       const updated = await this.devicesRepository.save(existing);
       this.realtimeService.emitDeviceUpdate(updated);
       await this.activityLogService.record({
@@ -133,13 +173,21 @@ export class DevicesService {
           status: updated.status
         }
       });
+      if (previousModel && sanitizedModel && sanitizedModel !== previousModel) {
+        await this.activityLogService.record({
+          projectId: updated.projectId,
+          action: 'device.model_changed',
+          details: {
+            deviceId: updated.id,
+            previousModel,
+            currentModel: sanitizedModel
+          }
+        });
+      }
       return updated;
     }
 
-    const metadata: Record<string, unknown> = {};
-    if (trimmedModel) {
-      metadata.model = trimmedModel;
-    }
+    const metadata = this.mergeMetadata(null, sanitizedModel, context.metadataPatch);
 
     const created = this.devicesRepository.create({
       projectId,
@@ -149,9 +197,9 @@ export class DevicesService {
       macAddress: sanitizedMac,
       ipAddress: sanitizedIp,
       status: desiredStatus,
-      lastSeenAt: new Date(),
+      lastSeenAt: snapshotSeenAt,
       hiddenAt: null,
-      metadata: Object.keys(metadata).length > 0 ? metadata : null
+      metadata
     });
     const saved = await this.devicesRepository.save(created);
     this.realtimeService.emitDeviceUpdate(saved);
@@ -159,6 +207,33 @@ export class DevicesService {
       projectId: saved.projectId,
       action: 'device.create',
       details: { deviceId: saved.id }
+    });
+    return saved;
+  }
+
+  async createSwitch(projectId: string, payload: RegisterSwitchDto): Promise<DeviceEntity> {
+    const trimmedName = payload.name.trim();
+    if (!trimmedName) {
+      throw new BadRequestException('交换机名称不能为空');
+    }
+    const created = this.devicesRepository.create({
+      projectId,
+      name: trimmedName,
+      alias: null,
+      type: 'Switch',
+      macAddress: null,
+      ipAddress: null,
+      status: 'unknown',
+      lastSeenAt: null,
+      hiddenAt: null,
+      metadata: null
+    });
+    const saved = await this.devicesRepository.save(created);
+    this.realtimeService.emitDeviceUpdate(saved);
+    await this.activityLogService.record({
+      projectId: saved.projectId,
+      action: 'device.create',
+      details: { deviceId: saved.id, type: 'Switch' }
     });
     return saved;
   }

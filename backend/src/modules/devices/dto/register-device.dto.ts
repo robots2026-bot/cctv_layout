@@ -39,7 +39,7 @@ export class RegisterDeviceDto {
   @IsOptional()
   model?: string;
 
-  @IsIn(['online', 'offline', 'unknown'])
+  @IsIn(['online', 'offline', 'unknown', 'warning'])
   @IsOptional()
   status?: DeviceStatus;
 
