@@ -1,6 +1,6 @@
 import { useMemo, useReducer, useState } from 'react';
 import { isAxiosError } from 'axios';
-import { DeviceSyncRequest, DeviceSyncStatus, DeviceSyncType, postDeviceSync } from '../services/deviceSync';
+import { DeviceSyncRequest, DeviceSyncType, postDeviceSync } from '../services/deviceSync';
 
 interface DeviceFormRow {
   id: string;
@@ -10,7 +10,6 @@ interface DeviceFormRow {
   mac: string;
   model: string;
   ip: string;
-  primaryStatus: DeviceSyncStatus;
   extraStatuses: string;
   latencyMs: string;
   packetLoss: string;
@@ -39,13 +38,6 @@ const deviceTypeOptions: Array<{ label: string; value: DeviceSyncType }> = [
   { label: 'NVR', value: 'NVR' },
   { label: '网桥', value: 'Bridge' },
   { label: '交换机', value: 'Switch' }
-];
-
-const statusOptions: Array<{ label: string; value: DeviceSyncStatus }> = [
-  { label: '在线', value: 'online' },
-  { label: '离线', value: 'offline' },
-  { label: '告警', value: 'warning' },
-  { label: '未知', value: 'unknown' }
 ];
 
 const bridgeRoleOptions: Array<{ label: string; value: 'AP' | 'ST' }> = [
@@ -87,18 +79,15 @@ const randomDeviceData = (type: DeviceSyncType) => {
   const suffix = Math.floor(Math.random() * 90) + 10;
   const name = `${randomFrom(deviceNameTemplates[type])} ${suffix}`;
   const model = randomFrom(deviceModelTemplates[type]);
-  const primaryStatus = randomFrom(['online', 'warning', 'offline'] as const);
-  const shouldHaveExtra = primaryStatus !== 'offline' && Math.random() > 0.5;
+  const shouldHaveExtra = Math.random() > 0.5;
   const extraStatuses = shouldHaveExtra ? randomFrom(extraStatusPool) : '';
-  const latency = primaryStatus === 'offline' ? '' : Math.max(5, Math.floor(Math.random() * 120)).toString();
-  const packetLoss =
-    primaryStatus === 'offline' ? '' : Math.random() > 0.6 ? (Math.random() * 1.5).toFixed(2) : '';
+  const latency = Math.max(5, Math.floor(Math.random() * 120)).toString();
+  const packetLoss = Math.random() > 0.6 ? (Math.random() * 1.5).toFixed(2) : '';
   const bridgeRole = type === 'Bridge' ? randomFrom(['AP', 'ST'] as const) : '';
 
   return {
     name,
     model,
-    primaryStatus: primaryStatus as DeviceSyncStatus,
     extraStatuses,
     latencyMs: latency,
     packetLoss,
@@ -111,8 +100,16 @@ const createDevice = (overrides?: Partial<DeviceFormRow>): DeviceFormRow => {
   const base = randomDeviceData(type);
   const mac = overrides?.mac ?? randomMac();
   const ip = overrides?.ip ?? (type === 'Switch' ? '' : randomIp());
-  const bridgeRole =
-    type === 'Bridge' ? overrides?.bridgeRole ?? (base.bridgeRole || 'AP') : '';
+  let bridgeRole: DeviceFormRow['bridgeRole'] = '';
+  if (type === 'Bridge') {
+    if (overrides?.bridgeRole === 'AP' || overrides?.bridgeRole === 'ST') {
+      bridgeRole = overrides.bridgeRole;
+    } else if (base.bridgeRole === 'AP' || base.bridgeRole === 'ST') {
+      bridgeRole = base.bridgeRole;
+    } else {
+      bridgeRole = 'AP';
+    }
+  }
 
   return {
     id: generateId(),
@@ -122,7 +119,6 @@ const createDevice = (overrides?: Partial<DeviceFormRow>): DeviceFormRow => {
     mac,
     model: overrides?.model ?? base.model,
     ip,
-    primaryStatus: overrides?.primaryStatus ?? base.primaryStatus,
     extraStatuses: overrides?.extraStatuses ?? base.extraStatuses,
     latencyMs: overrides?.latencyMs ?? base.latencyMs,
     packetLoss: overrides?.packetLoss ?? base.packetLoss,
@@ -156,13 +152,16 @@ const formReducer = (state: FormState, action: FormAction): FormState => {
             const nextType = action.value as DeviceSyncType;
             next.type = nextType;
             if (nextType === 'Bridge') {
-              next.bridgeRole = next.bridgeRole && next.bridgeRole !== '' ? next.bridgeRole : 'AP';
+              if (next.bridgeRole !== 'AP' && next.bridgeRole !== 'ST') {
+                next.bridgeRole = 'AP';
+              }
             } else {
               next.bridgeRole = '';
             }
           }
           if (action.field === 'bridgeRole') {
-            next.bridgeRole = (action.value as DeviceFormRow['bridgeRole']) ?? '';
+            const rawValue = action.value;
+            next.bridgeRole = rawValue === 'AP' || rawValue === 'ST' ? (rawValue as DeviceFormRow['bridgeRole']) : '';
           }
           return next;
         })
@@ -197,7 +196,6 @@ const createSampleState = (): FormState => ({
       mac: '00-11-32-AA-BB-CC',
       model: 'IPC123',
       ip: '10.0.1.1',
-      primaryStatus: 'online',
       extraStatuses: 'signal-weak',
       latencyMs: '42',
       packetLoss: '0.3'
@@ -208,7 +206,6 @@ const createSampleState = (): FormState => ({
       mac: '00-11-32-DD-EE-FF',
       model: 'Bridge-200',
       ip: '10.0.1.2',
-      primaryStatus: 'warning',
       extraStatuses: 'high-load',
       bridgeRole: 'ST'
     })
@@ -317,15 +314,13 @@ const GatewayMock = () => {
         }
       }
 
-      const statuses = [device.primaryStatus, ...extraStatusList];
-
       const result = {
         mac: trimmedMac,
         type: device.type,
         ...(trimmedName ? { name: trimmedName } : {}),
         ...(trimmedModel ? { model: trimmedModel } : {}),
         ...(trimmedIp ? { ip: trimmedIp } : {}),
-        ...(statuses.length > 0 ? { statuses } : {}),
+        ...(extraStatusList.length > 0 ? { statuses: extraStatusList } : {}),
         ...(latency !== undefined ? { latencyMs: latency } : {}),
         ...(packetLoss !== undefined ? { packetLoss } : {}),
         ...(metrics ? { metrics } : {}),
@@ -503,7 +498,7 @@ const GatewayMock = () => {
             </button>
           </div>
           <p className="mt-2 text-xs text-slate-400">
-            主状态决定后端 `status`，附加标签将写入 `metadata.extraStatuses`。自定义指标需输入对象 JSON（例如
+            设备出现在快照中即视为在线，附加状态标签会写入 `metadata.extraStatuses`；自定义指标需输入对象 JSON（例如
             {" { \"rssi\": -42 } "}）。
           </p>
           <div className="mt-4 space-y-4">
@@ -608,27 +603,6 @@ const GatewayMock = () => {
                       placeholder="IPC123"
                       className="w-full rounded border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-brand-400/80 focus:outline-none"
                     />
-                  </label>
-                  <label className="flex flex-col gap-2 text-xs font-medium text-slate-300">
-                    主状态
-                    <select
-                      value={device.primaryStatus}
-                      onChange={(event) =>
-                        dispatch({
-                          type: 'updateDevice',
-                          id: device.id,
-                          field: 'primaryStatus',
-                          value: event.target.value as DeviceSyncStatus
-                        })
-                      }
-                      className="w-full rounded border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-brand-400/80 focus:outline-none"
-                    >
-                      {statusOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
                   </label>
                   <label className="flex flex-col gap-2 text-xs font-medium text-slate-300 md:col-span-2 xl:col-span-3">
                     附加状态标签（逗号分隔）

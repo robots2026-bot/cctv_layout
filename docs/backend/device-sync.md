@@ -31,9 +31,14 @@
           "type": "Camera",
           "model": "IPC123",
           "ip": "10.0.1.1",
-          "statuses": ["online", "signal-weak"],
+          "statuses": ["signal-weak"],
           "latencyMs": 42,
-          "packetLoss": 0.3,
+          "packetLoss": 0.3
+        },
+        {
+          "mac": "00-11-32-DD-EE-FF",
+          "name": "基站网桥 AP",
+          "type": "Bridge",
           "bridgeRole": "AP"
         }
       ]
@@ -46,11 +51,11 @@
    - 未绑定或绑定到其他项目 → 拒绝请求并记录告警。
 2. 根据 `projectCode` 查询项目 UUID。
 3. 遍历设备列表：
-   - 以 `(project_id, mac)` 去重匹配；网关保证 `mac` 必填。
+   - 以 `(project_id, mac)` 去重匹配；网关必须提供有效 `mac`，缺失将被判定为失败记录，IP 不再作为补偿匹配依据。
    - `type`/`model` 变化视为设备替换：覆盖数据前记录旧值到 `metadata.previousModel`，写 `activity_log`（`device.model_changed`）。
-   - 更新字段：`name/type/model/ip/status`、`lastSeenAt`、`metadata.metrics`、`metadata.extraStatuses`、`gatewayMac`、`gatewayIp`、`scannedAt`；对于网桥设备，根据 `bridgeRole`/`mode`/名称等提示写入 `metadata.bridgeRole`，区分 AP 和 ST。
+   - 更新字段：`name/type/model/ip/status`、`lastSeenAt`、`metadata.metrics`、`metadata.extraStatuses`、`gatewayMac`、`gatewayIp`、`scannedAt`；快照出现即视为在线，缺席超 3 分钟即标记离线。对于网桥设备，根据 `bridgeRole`/`mode`/名称等提示写入 `metadata.bridgeRole`，区分 AP 和 ST。
    - 调用 `realtimeService.emitDeviceUpdate` 推送前端。
-4. 快照结束后，将本次未出现的设备状态标记为 `offline` 并推送。
+4. 快照结束后，将缺席且 `lastSeenAt` 距当前时间超过 3 分钟的设备状态标记为 `offline` 并推送。
 5. 记录操作日志（`activity_log` action=`device.sync`）。
 
 ## 5. 离线与重新绑定提醒
@@ -58,7 +63,7 @@
 - 离线后重新推送时若绑定不一致 → 拒绝请求 + 告警，提示需要重新绑定。
 
 ## 6. 前端配合要点
-- 继续监听 `device.update`，根据 `status` + `metadata.extraStatuses` 渲染未布局列表和画布节点；当 `metadata.bridgeRole` 存在时，未布局面板与节点图标展示 AP/ST 徽章。
+- 继续监听 `device.update`，根据后台推送的 `status` 以及 `metadata.extraStatuses` 渲染未布局列表和画布节点；当 `metadata.bridgeRole` 存在时，未布局面板与节点图标展示 AP/ST 徽章。
 - 布局/项目界面可展示“网关离线/绑定异常”提示（后端提供状态接口）。
 
 ## 7. 初期简化实现
@@ -66,3 +71,7 @@
 - `metadata.metrics` 仅存延迟、丢包（无需复杂结构）。
 - 离线阈值、告警可先只写日志，后续再接入通知通道。
 - 安全（签名/限频）留到下一阶段加入。
+
+## 8. 数据维护
+- 运行 `npm run dedupe:switches` 可去除同一项目下名称重复的交换机，仅保留最早的记录，适用于历史数据迁移。
+- 运行 `npm run clean:devices-without-mac` 可清理除交换机外缺少 MAC 地址的遗留设备，避免重复数据干扰同步。

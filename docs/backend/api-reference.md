@@ -331,9 +331,16 @@
         "type": "Camera",
         "model": "IPC123",
         "ip": "10.0.1.1",
-        "statuses": ["online", "signal-weak"],
+        "statuses": ["signal-weak"],
         "latencyMs": 42,
-        "packetLoss": 0.3,
+        "packetLoss": 0.3
+      },
+      {
+        "mac": "00-11-32-DD-EE-FF",
+        "name": "基站网桥 AP",
+        "type": "Bridge",
+        "model": "Bridge-Pro",
+        "ip": "10.0.2.1",
         "bridgeRole": "AP"
       }
     ]
@@ -342,7 +349,8 @@
   - `projectCode`：项目通信 ID（0-255），来自项目管理界面的“通信 ID”。
 - `gatewayMac`：现场 NanoPi2 网关 MAC，用作绑定校验；`gatewayIp` 为当前网关 IP，便于排查。
    - `scannedAt`：网关采样时间；缺省时后端使用当前时间。
-  - `devices`：设备列表；`mac` 为物理网卡地址（必填，作为唯一标识）。网关保证每条记录均携带有效 `mac`，不存在缺失情况。`statuses` 为状态标签数组，第一项视为主状态，其余作为附加标签。
+- `devices`：设备列表；`mac` 为物理网卡地址（必填，作为唯一标识）。网关保证每条记录均携带有效 `mac`，不存在缺失情况。`statuses` 为附加状态标签数组（例如信号弱、抖动），不会直接影响主状态。
+  - `devices`：设备列表；`mac` 为物理网卡地址（必填，作为唯一标识）。缺少 `mac` 的设备会被判定为非法并记录在 `failed` 列表；网桥可通过 `bridgeRole` 标注 AP/ST。`statuses` 为附加状态标签数组（例如信号弱、抖动），不会直接影响主状态。
 - 额外指标（可选）：
   - `latencyMs`：往返延迟毫秒数（Number）。
   - `packetLoss`：丢包率百分比（0-100 的 Number 或 0-1 小数）。
@@ -361,10 +369,10 @@
 ### 7.2 服务端处理
 1. 通过 `projectCode` 查询 `ProjectEntity.code`，找不到则记日志并将该设备列入 `failed`。
 2. 对每个设备：
-   - 使用 `(projectId, mac)` 去重匹配；网关保证提供唯一且稳定的 `mac`，不再退回使用其它字段。
+   - 使用 `(projectId, mac)` 去重匹配；网关保证提供唯一且稳定的 `mac`，不再根据 IP 等字段补偿匹配。
    - `type`、`model` 在同一 `mac` 上视为稳定属性，如发生变化视为设备替换：更新前记录历史值并写入 `activity_log`（action=`device.model_changed`），便于审计。
    - 调用 `devicesService.registerOrUpdate` 更新字段：`name/type/model/ip/status`、`lastSeenAt`，并存储 `gatewayMac`、`gatewayIp` 及采样时间。
-  - `statuses[0]` 写入主状态（白名单：`online|offline|warning|unknown`），多余标签存入 `metadata.extraStatuses`。
+   - 出现在快照中的设备统一标记为 `online`，`statuses` 数组仅作为附加标签写入 `metadata.extraStatuses`。
   - 将延迟/丢包等指标记录到 `metadata.metrics`，并同步更新时间戳、网关信息：
      ```json
     {
@@ -377,7 +385,7 @@
      ```
    - 对于网桥设备（`type=Bridge`），通过 `bridgeRole`/`mode`/名称等字段判定 AP/ST，并写入 `metadata.bridgeRole`，后续未布局面板与画布均按此展示角色徽章。
 3. 每台设备成功后调用 `realtimeService.emitDeviceUpdate`，前端未布局列表即时刷新；同步标记本次快照中出现过的设备 ID。
-4. 快照处理结束后，对未出现在本次快照中的设备，将其状态置为 `offline` 并同样广播（可配置是否立即下线或保留一定阈值）。
+4. 快照处理结束后，对未出现在本次快照且 `lastSeenAt` 距当前时间超过 3 分钟的设备，将其状态置为 `offline` 并同样广播（阈值可配置）。
 4. 可选：写入 `activity_log`，action=`device.sync`，便于审计。
 
 ### 7.3 错误处理

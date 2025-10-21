@@ -16,7 +16,7 @@ export class ProjectDevicesController {
     return {
       id: device.id,
       name: device.name,
-      alias: device.alias,
+      alias: device.type === 'Switch' ? null : device.alias,
       type: device.type,
       mac: device.macAddress,
       ip: device.ipAddress,

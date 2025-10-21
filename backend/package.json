@@ -13,6 +13,8 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "seed": "ts-node src/scripts/seed.ts",
+    "dedupe:switches": "ts-node src/scripts/deduplicate-switches.ts",
+    "clean:devices-without-mac": "ts-node src/scripts/remove-devices-without-mac.ts",
     "migration:run": "ts-node --project tsconfig.json ./node_modules/typeorm/cli.js migration:run -d src/database/data-source.ts",
     "migration:revert": "ts-node --project tsconfig.json ./node_modules/typeorm/cli.js migration:revert -d src/database/data-source.ts",
     "prestart": "node scripts/ensure-database.js",

@@ -16,8 +16,8 @@ export const getDeviceCategory = (type?: string): DeviceCategory => {
   }
   if (
     normalized.includes('bridge') ||
-    normalized.includes('ap') ||
-    normalized.includes('relay')
+    normalized.includes('relay') ||
+    (normalized.includes('ap') && !normalized.includes('camera') && !normalized.includes('cam'))
   ) {
     return 'bridge';
   }

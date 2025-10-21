@@ -20,11 +20,10 @@ const DEVICE_TYPE_MAP: Record<string, 'Camera' | 'NVR' | 'Bridge' | 'Switch'> = 
   switch: 'Switch'
 };
 
-const ALLOWED_DEVICE_STATUSES: DeviceStatus[] = ['online', 'offline', 'warning', 'unknown'];
-
 @Injectable()
 export class DeviceSyncService {
   private readonly logger = new Logger(DeviceSyncService.name);
+  private static readonly OFFLINE_AFTER_MS = 3 * 60 * 1000;
 
   constructor(
     private readonly devicesService: DevicesService,
@@ -171,22 +170,12 @@ export class DeviceSyncService {
 
   private extractStatuses(statuses?: string[]) {
     if (!Array.isArray(statuses) || statuses.length === 0) {
-      return { primaryStatus: 'unknown' as DeviceStatus, extraStatuses: [] as string[] };
+      return { primaryStatus: 'online' as DeviceStatus, extraStatuses: [] as string[] };
     }
-    const cleaned = statuses
-      .map((status) => (typeof status === 'string' ? status.trim() : ''))
-      .filter((status) => status.length > 0);
-
-    if (cleaned.length === 0) {
-      return { primaryStatus: 'unknown' as DeviceStatus, extraStatuses: [] as string[] };
-    }
-
-    const primary = cleaned[0].toLowerCase();
-    const normalizedPrimary = ALLOWED_DEVICE_STATUSES.includes(primary as DeviceStatus)
-      ? (primary as DeviceStatus)
-      : ('unknown' as DeviceStatus);
-    const extras = cleaned.slice(1).map((status) => status.toLowerCase());
-    return { primaryStatus: normalizedPrimary, extraStatuses: extras };
+    const extras = statuses
+      .map((status) => (typeof status === 'string' ? status.trim().toLowerCase() : ''))
+      .filter((status) => status.length > 0 && status !== 'online' && status !== 'offline');
+    return { primaryStatus: 'online' as DeviceStatus, extraStatuses: Array.from(new Set(extras)) };
   }
 
   private resolveBridgeRole(
@@ -278,6 +267,12 @@ export class DeviceSyncService {
       if (device.status === 'offline') {
         continue;
       }
+      if (device.lastSeenAt instanceof Date) {
+        const elapsed = snapshotTime.getTime() - device.lastSeenAt.getTime();
+        if (elapsed < DeviceSyncService.OFFLINE_AFTER_MS) {
+          continue;
+        }
+      }
       const offlinePayload = {
         type: device.type,
         name: device.name,
@@ -289,7 +284,8 @@ export class DeviceSyncService {
         await this.devicesService.registerOrUpdate(projectId, offlinePayload, {
           metadataPatch: { extraStatuses: [] },
           lastSeenAt: snapshotTime,
-          source: 'sync'
+          source: 'sync',
+          existingDeviceId: device.id
         });
       } catch (error) {
         this.logger.warn(`Failed to mark device offline ${device.id}`, error);

@@ -6,7 +6,7 @@ import {
   NotFoundException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { ILike, In, Repository } from 'typeorm';
 import { DeviceEntity } from './entities/device.entity';
 import { RegisterDeviceDto } from './dto/register-device.dto';
 import { RegisterSwitchDto } from './dto/register-switch.dto';
@@ -20,6 +20,7 @@ interface RegisterOrUpdateContext {
   metadataPatch?: Record<string, unknown> | null;
   lastSeenAt?: Date | null;
   source?: 'sync' | 'manual';
+  existingDeviceId?: string;
 }
 
 @Injectable()
@@ -126,20 +127,21 @@ export class DevicesService {
       throw new BadRequestException('非交换机设备必须提供 MAC 地址');
     }
 
+    if (context.source === 'sync' && !sanitizedMac) {
+      throw new BadRequestException('同步设备必须提供 MAC 地址');
+    }
+
     let existing: DeviceEntity | null = null;
-    if (sanitizedMac) {
+    if (context.existingDeviceId) {
+      existing = await this.devicesRepository.findOne({
+        where: { id: context.existingDeviceId, projectId }
+      });
+    }
+    if (!existing && sanitizedMac) {
       existing = await this.devicesRepository.findOne({
         where: {
           projectId,
           macAddress: sanitizedMac
-        }
-      });
-    }
-    if (!existing && sanitizedIp) {
-      existing = await this.devicesRepository.findOne({
-        where: {
-          projectId,
-          ipAddress: sanitizedIp
         }
       });
     }
@@ -216,6 +218,16 @@ export class DevicesService {
     if (!trimmedName) {
       throw new BadRequestException('交换机名称不能为空');
     }
+    const existing = await this.devicesRepository.findOne({
+      where: {
+        projectId,
+        type: 'Switch',
+        name: ILike(trimmedName)
+      }
+    });
+    if (existing) {
+      throw new ConflictException('同一项目内交换机名称已存在');
+    }
     const created = this.devicesRepository.create({
       projectId,
       name: trimmedName,
@@ -260,6 +272,9 @@ export class DevicesService {
     const entity = await this.devicesRepository.findOne({ where: { id: deviceId, projectId } });
     if (!entity) {
       throw new NotFoundException(`Device ${deviceId} not found in project ${projectId}`);
+    }
+    if (entity.type === 'Switch') {
+      throw new BadRequestException('交换机不支持设置别名');
     }
 
     await this.assertDeviceUnplaced(projectId, deviceId);

@@ -54,7 +54,7 @@ export interface ImageOptimizationOptions {
   maxDataUrlLength?: number;
   quality?: number;
   minQuality?: number;
-  preferredFormat?: 'image/webp' | 'image/jpeg';
+  preferredFormat?: 'image/webp' | 'image/jpeg' | 'image/png';
   skipProcessingTypes?: string[];
   fallbacks?: ('image/png' | 'image/jpeg' | 'image/webp')[];
 }
@@ -64,7 +64,7 @@ const approximateBytesFromBase64 = (length: number) => Math.floor((length * 3) /
 const renderToDataUrl = (
   image: HTMLImageElement,
   scale: number,
-  format: 'image/webp' | 'image/jpeg',
+  format: 'image/webp' | 'image/jpeg' | 'image/png',
   quality: number
 ) => {
   const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));

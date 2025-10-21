@@ -1,6 +1,6 @@
 import { Dialog, Transition } from '@headlessui/react';
 import type { AxiosError } from 'axios';
-import { DragEvent, FormEvent, Fragment, useEffect, useMemo, useState } from 'react';
+import { DragEvent, FormEvent, Fragment, MouseEvent, useEffect, useMemo, useState } from 'react';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { useLayoutStore } from '../../stores/layoutStore';
 import { useRealtimeStore } from '../../stores/realtimeStore';
@@ -233,9 +233,15 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
         setIsSubmitting(false);
         return;
       }
-      const created = await registerSwitch(projectId, { name: trimmedName });
-      if (!created) {
-        setSubmitError('交换机创建失败，请稍后重试');
+      try {
+        await registerSwitch(projectId, { name: trimmedName });
+      } catch (error) {
+        const axiosError = error as AxiosError<{ message?: string | string[] }>;
+        if (axiosError?.response?.status === 409) {
+          setSubmitError('同一项目内交换机名称已存在，请调整后重试。');
+        } else {
+          setSubmitError('交换机创建失败，请稍后重试');
+        }
         setIsSubmitting(false);
         return;
       }
@@ -337,6 +343,10 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
 
   const handleEditDevice = () => {
     if (!contextMenu) return;
+    const category = getDeviceCategory(contextMenu.device.type);
+    if (category === 'switch') {
+      return;
+    }
     const device = contextMenu.device;
     setManualForm({
       name: device.alias ?? ''
@@ -415,10 +425,18 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
             const metadata = (device.metadata ?? null) as Record<string, unknown> | null;
             const bridgeRole =
               category === 'bridge'
-                ? resolveBridgeRole(metadata ?? undefined, device.name)
+                ? device.bridgeRole && device.bridgeRole !== 'UNKNOWN'
+                  ? device.bridgeRole
+                  : resolveBridgeRole(metadata ?? undefined, device.name)
                 : 'UNKNOWN';
             const alias = device.alias?.trim();
-            const deviceName = alias && alias.length > 0 ? alias : device.name?.trim() ? device.name : typeVisual.label;
+            const deviceName = category === 'switch'
+              ? device.name?.trim() ?? typeVisual.label
+              : alias && alias.length > 0
+                ? alias
+                : device.name?.trim()
+                  ? device.name
+                  : typeVisual.label;
             return (
               <li key={device.mac ?? device.id}>
                 <DevicePaletteItem
@@ -443,13 +461,15 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
             className="fixed z-50 min-w-[160px] rounded-md border border-slate-700 bg-slate-900/95 py-1 text-sm text-slate-200 shadow-lg"
             style={{ top: contextMenuPosition.top, left: contextMenuPosition.left }}
           >
-           <button
-             type="button"
-             onClick={handleEditDevice}
-             className="block w-full px-3 py-2 text-left hover:bg-slate-800/80"
-           >
-              编辑别名
-           </button>
+            {getDeviceCategory(contextMenu.device.type) !== 'switch' && (
+              <button
+                type="button"
+                onClick={handleEditDevice}
+                className="block w-full px-3 py-2 text-left hover:bg-slate-800/80"
+              >
+                编辑别名
+              </button>
+            )}
             <button
               type="button"
               onClick={handleDeleteDevice}

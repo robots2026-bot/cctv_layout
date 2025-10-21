@@ -1,7 +1,5 @@
 import { apiClient } from '../utils/apiClient';
 
-export type DeviceSyncStatus = 'online' | 'offline' | 'warning' | 'unknown';
-
 export type DeviceSyncType = 'Camera' | 'NVR' | 'Bridge' | 'Switch';
 
 export interface DeviceSyncDevice {

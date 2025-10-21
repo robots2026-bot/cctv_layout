@@ -5,10 +5,7 @@ const inferDefaultBaseUrl = () => {
     return import.meta.env.VITE_API_BASE_URL;
   }
   if (typeof window !== 'undefined') {
-    const { protocol, hostname } = window.location;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return `${protocol}//${hostname}:3000/api`;
-    }
+    return '/api';
   }
   return '/api';
 };

@@ -48,6 +48,16 @@ interface RealtimeState {
 
 let socket: Socket | null = null;
 
+const inferRealtimeBaseUrl = () => {
+  if (import.meta.env.VITE_REALTIME_URL) {
+    return import.meta.env.VITE_REALTIME_URL as string;
+  }
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return 'http://localhost:3000';
+};
+
 const getDeviceKey = (device: DeviceSummary): string => device.mac ?? device.id;
 const getPlacedKeys = () =>
   new Set(
@@ -66,8 +76,7 @@ export const useRealtimeStore = create<RealtimeState>()(
       if (typeof window === 'undefined') return;
       if (socket && socket.connected) return;
 
-      const baseUrl =
-        (import.meta.env.VITE_REALTIME_URL as string | undefined) ?? 'http://localhost:3000';
+      const baseUrl = inferRealtimeBaseUrl();
 
       set({ connectionState: 'connecting' });
       socket = io(baseUrl, {
@@ -111,10 +120,11 @@ export const useRealtimeStore = create<RealtimeState>()(
               (device.type === 'Bridge'
                 ? resolveBridgeRole(metadata ?? undefined, device.name)
                 : 'UNKNOWN');
+            const isSwitch = device.type === 'Switch';
             return {
               ...device,
               mac: device.mac ?? null,
-              alias: device.alias ?? null,
+              alias: isSwitch ? null : device.alias ?? null,
               metadata,
               bridgeRole
             };
@@ -145,10 +155,11 @@ export const useRealtimeStore = create<RealtimeState>()(
           (summary.type === 'Bridge'
             ? resolveBridgeRole(metadata ?? undefined, summary.name)
             : 'UNKNOWN');
+        const isSwitch = summary.type === 'Switch';
         const normalizedSummary: DeviceSummary = {
           ...summary,
           mac: summary.mac ?? null,
-          alias: summary.alias ?? null,
+          alias: isSwitch ? null : summary.alias ?? null,
           metadata,
           bridgeRole
         };
@@ -168,7 +179,7 @@ export const useRealtimeStore = create<RealtimeState>()(
         return normalizedSummary;
       } catch (error) {
         console.error('手动创建交换机失败', error);
-        return null;
+        throw error;
       }
     },
     updateDeviceName: async (projectId, deviceId, payload) => {
@@ -240,10 +251,11 @@ export const useRealtimeStore = create<RealtimeState>()(
           (device.type === 'Bridge'
             ? resolveBridgeRole(metadata ?? undefined, device.name)
             : 'UNKNOWN');
+        const isSwitch = device.type === 'Switch';
         const normalized: DeviceSummary = {
           ...device,
           mac: device.mac ?? null,
-          alias: device.alias ?? null,
+          alias: isSwitch ? null : device.alias ?? null,
           metadata,
           bridgeRole
         };
@@ -287,10 +299,11 @@ export const useRealtimeStore = create<RealtimeState>()(
               (message.payload.type === 'Bridge'
                 ? resolveBridgeRole(metadata ?? undefined, message.payload.name)
                 : 'UNKNOWN');
+            const isSwitch = message.payload.type === 'Switch';
             const normalized: DeviceSummary = {
               ...message.payload,
               mac: message.payload.mac ?? null,
-              alias: message.payload.alias ?? null,
+              alias: isSwitch ? null : message.payload.alias ?? null,
               metadata,
               bridgeRole
             };

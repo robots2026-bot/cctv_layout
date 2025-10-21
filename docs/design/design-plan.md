@@ -8,6 +8,7 @@
   - 技术选型：React + TypeScript + Zustand 进行状态管理，配合 Tailwind CSS 提升样式开发效率。
   - 布局编辑：采用 Konva.js 支持 Canvas 拖拽、缩放、连接线绘制，使用 react-konva 封装组件；新增蓝图图层用于导入工地平面图并可独立缩放，画布模式扩展 `blueprint` 以隔离图纸调整与设备操作。
   - 通信：通过 WebSocket 接收实时设备扫描推送，REST API 执行常规数据管理操作。
+  - 交付与本地访问：统一由 Nginx 容器暴露静态资源与反向代理；开发、测试与生产均通过 `http://localhost:8080` 进入应用，Nginx 根据 `/api/*`、`/realtime/*` 路径将请求转发至后端服务，避免前端跨域或端口差异问题。
 - **后端**：
   - 技术选型：Node.js（NestJS 框架）作为唯一后端框架选择，统一采用 TypeScript 编写服务。
   - 功能模块：
@@ -22,7 +23,7 @@
   - 登录/项目概览页：展示项目卡片、最近更新时间、设备总览。
   - 布局工作台：左侧项目导航（含快速搜索，可折叠）+ 中央画布区（Konva Stage）+ 右侧未布局设备面板（可折叠）+ 浮动属性编辑面板。
   - 系统设置页：维护扫描周期、默认图层可见性、团队成员权限。
-  - 模拟网关调试页：提供项目通信 ID、网关标识（MAC/IP）、采样时间及设备列表（可增删行、调序）编辑区，网桥设备需确认 AP/ST 角色；支持延迟/丢包等指标录入、实时 JSON 预览与一键推送 `POST /device-sync`，发送结果在页面内以成功/失败列表呈现。
+  - 模拟网关调试页：提供项目通信 ID、网关标识（MAC/IP）、采样时间及设备列表（可增删行、调序）编辑区，网桥设备需确认 AP/ST 角色；设备在线状态由后端自动判定（出现即视为在线，连续 3 分钟未出现即自动离线），页面仅保留附加状态标签录入；支持延迟/丢包等指标录入、实时 JSON 预览与一键推送 `POST /device-sync`，发送结果在页面内以成功/失败列表呈现。
 - **项目管理界面（更新）**：
   - 入口 `/projects/manage` 采用“左侧筛选栏 + 右侧列表 + 详情抽屉”布局；顶部仅保留指标卡片与“新建项目”按钮；
   - 筛选栏提供状态、阶段、地区、通信 ID 范围及排序选项，变更即时刷新；
@@ -32,13 +33,14 @@
 - **状态切片**：
   1. `projectStore`：项目元信息、成员、权限，负责发起 REST 查询。
   2. `canvasStore`：画布元素集合、选择状态、图层可见性、撤销重做栈，封装对 Konva 节点的纯数据操作。
-  3. `realtimeStore`：WebSocket 连接状态、在线成员列表、实时设备心跳，并合并后端推送的设备元数据（含 `metadata.bridgeRole`）到未布局列表。
+  3. `realtimeStore`：WebSocket 连接状态、在线成员列表、实时设备心跳，并合并后端推送的设备元数据（含 `metadata.bridgeRole`）；设备在线/离线以后台推送为准，无需前端手动维护。
   4. `uiStore`：模态窗口、通知、全局加载态。
-  - 模拟网关调试页使用局部状态（`useReducer` + `useMemo`）组合校验与预览，通过 `apiClient.post('/device-sync')` 直接完成推送，不新增全局 store。
+  - 模拟网关调试页使用局部状态（`useReducer` + `useMemo`）组合校验与预览，通过 `apiClient.post('/device-sync')` 直接完成推送，不新增全局 store；状态字段自动补齐在线标识。
 - **组件划分**：
   - 原子组件：按钮、表单、弹窗等，通过 Tailwind 原子类与 Radix UI 组合实现。
   - 画布组件：`CanvasStage`、`DeviceNode`、`ConnectionLine`、`GridBackground`，严格区分展示型与容器型组件；蓝图相关能力拆分为 `BlueprintLayer` 与 `BlueprintControls`，由 `canvasStore.mode` 中的 `blueprint` 态控制交互，保持背景缩放/位置逻辑独立并防止误操作。
   - 侧栏组件：`DevicePalette`（可拖拽列表，使用图形化图标与绿色/深灰背景区分设备在线状态；网桥节点追加 AP/ST 徽章，快速识别上下行角色）、`PropertyPanel`、`VersionHistory`。
+  - 交换机仅展示名称，不支持别名；上下文菜单仅保留“隐藏”，避免与其它设备共享的别名编辑入口。
   - 调试组件：`GatewayMockForm` 负责收集基础字段，`MockDeviceTable` 支撑设备行编辑与批量导入，`PayloadPreview` 展示实时 JSON 与校验告警，`MockSendResult` 输出后端响应与错误提示。
 - **性能策略**：
   - 使用 `react-konva` 的 `FastLayer` 渲染大量静态图元。
@@ -53,7 +55,7 @@
 - **分层结构**：NestJS `modules` → `controllers`/`resolvers` → `services` → `repositories`/`integrations`，以依赖注入提升可测试性。
 - **核心模块职责**：
   1. `ProjectsModule`：项目 CRUD、成员与权限管理、操作日志落库；`GET /api/projects` 支持排序、通信 ID 区间与统计返回，`GET /api/projects/:id` 输出成员与近期布局摘要，若项目存在布局但未设默认布局会自动填充；其余 CRUD 接口沿用软删除/恢复语义，通过 `ProjectsGateway` 广播 `projects.updated` 同步侧边栏。
-  2. `DevicesModule`：对接扫描器（REST/消息队列），执行设备标准化、幂等写入、状态同步；非交换机设备以 MAC 地址与项目 ID 形成唯一约束（数据库主键仍使用 UUID），设备新增仅来自网关。前端仅允许对未布局设备维护“别名”和执行“隐藏”动作：隐藏后记录 `hidden_at`，后续网关推送同一 MAC 会自动清除；别名为空时界面使用网关同步的原始名称。后端依据各布局当前版本过滤已落位或已隐藏的设备，防止画布数据失配，并在 `metadata.bridgeRole` 中持久化网桥 AP/ST 角色，供画布与侧栏展示。
+  2. `DevicesModule`：对接扫描器（REST/消息队列），执行设备标准化、幂等写入、状态同步；非交换机设备以 MAC 地址与项目 ID 形成唯一约束（数据库主键仍使用 UUID），设备新增仅来自网关。交换机禁止设置别名、仅保留名称，并在项目维度内强制唯一；提供清理脚本去除存量重复记录。前端仅允许对未布局设备维护“别名”和执行“隐藏”动作：隐藏后记录 `hidden_at`，后续网关推送同一 MAC 会自动清除；别名为空时界面使用网关同步的原始名称。设备在线状态由同步任务自动维护：本次快照出现即标记为 `online`，连续 3 分钟未出现即降为 `offline`。后端依据各布局当前版本过滤已落位或已隐藏的设备，防止画布数据失配，并在 `metadata.bridgeRole` 中持久化网桥 AP/ST 角色，供画布与侧栏展示。
   3. `LayoutsModule`：保存画布 JSON、维护版本链、处理冲突合并；首次创建布局时若项目无默认布局自动设为默认。
   4. `FilesModule`：处理背景图上传（S3 兼容存储）、生成缩略图、提供受控访问链接。
   5. `RealtimeGateway`：基于 `@nestjs/websockets`，统一管理房间订阅、事件广播、心跳检测。
@@ -174,3 +176,4 @@
 3. **工程化与运维**
    - 前后端均提供独立 Dockerfile 与 npm scripts；前端 `npm run build`、后端 `npm run build` 均通过。
    - README 已更新为快速启动指南，明确运行方式与环境变量约定。
+   - Docker Compose 默认同时启动 `frontend` 与 `nginx`，本地调试需通过 `docker compose up` 保持统一入口；后端 `ALLOWED_ORIGINS` 必须至少包含 `http://localhost:8080` 以匹配代理源站。

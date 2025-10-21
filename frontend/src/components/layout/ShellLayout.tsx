@@ -11,10 +11,11 @@ const ShellLayout = ({ children }: PropsWithChildren) => {
     isProjectSidebarCollapsed: state.isProjectSidebarCollapsed,
     toggleProjectSidebar: state.toggleProjectSidebar
   }));
-  const { projects, fetchProjects, isLoading } = useProjectStore((state) => ({
+  const { projects, fetchProjects, isLoading, lastFetchedAt } = useProjectStore((state) => ({
     projects: state.projects,
     fetchProjects: state.fetchProjects,
-    isLoading: state.isLoading
+    isLoading: state.isLoading,
+    lastFetchedAt: state.lastFetchedAt
   }));
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,10 +26,10 @@ const ShellLayout = ({ children }: PropsWithChildren) => {
   const shouldShowProjectSidebar = !isProjectManagementRoute && !isGatewayMockRoute;
 
   useEffect(() => {
-    if (!isLoading && projects.length === 0) {
+    if (!isLoading && projects.length === 0 && !lastFetchedAt) {
       void fetchProjects();
     }
-  }, [fetchProjects, isLoading, projects.length]);
+  }, [fetchProjects, isLoading, projects.length, lastFetchedAt]);
 
   const filteredProjects = useMemo(() => {
     if (!searchTerm.trim()) {
