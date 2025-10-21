@@ -16,8 +16,6 @@ export const CanvasLinkingControls = () => {
     mode,
     setMode,
     cancelLinking,
-    selectedConnectionId,
-    removeConnection,
     viewportScale,
     setViewport,
     isLocked,
@@ -33,8 +31,6 @@ export const CanvasLinkingControls = () => {
     mode: state.mode,
     setMode: state.setMode,
     cancelLinking: state.cancelLinking,
-    selectedConnectionId: state.selectedConnectionId,
-    removeConnection: state.removeConnection,
     viewportScale: state.viewport.scale,
     setViewport: state.setViewport,
     isLocked: state.isLocked,
@@ -75,15 +71,6 @@ export const CanvasLinkingControls = () => {
     setMode(nextMode);
   };
 
-  const handleDeleteConnection = () => {
-    if (mode !== 'linking' || isLocked) {
-      return;
-    }
-    if (selectedConnectionId) {
-      removeConnection(selectedConnectionId);
-    }
-  };
-
   const handleResetZoom = () => {
     const width = viewport.width ?? 0;
     const height = viewport.height ?? 0;
@@ -113,8 +100,6 @@ export const CanvasLinkingControls = () => {
         ? 'border-sky-400 bg-sky-500 text-white shadow-inner shadow-sky-900/50'
         : 'border-transparent bg-slate-800/70 text-slate-200 hover:bg-slate-700/80'
     }`;
-
-  const showConnectionDeletion = mode === 'linking' && Boolean(selectedConnectionId);
 
   const handleSave = async () => {
     try {
@@ -147,16 +132,6 @@ export const CanvasLinkingControls = () => {
             蓝图
           </button>
         </div>
-        {showConnectionDeletion && (
-          <button
-            type="button"
-            onClick={handleDeleteConnection}
-            disabled={isLocked}
-            className="rounded-md border border-slate-600/70 px-3 py-1 text-xs font-medium text-slate-100 transition hover:bg-slate-800/80 disabled:cursor-not-allowed disabled:border-slate-800/60 disabled:text-slate-500"
-          >
-            删除选中连线
-          </button>
-        )}
       </div>
       <div className="pointer-events-auto flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-2">

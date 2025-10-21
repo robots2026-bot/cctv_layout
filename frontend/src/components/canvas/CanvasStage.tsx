@@ -316,6 +316,7 @@ export const CanvasStage = () => {
           if (!stageNode) return;
           stageNode.container().style.cursor = 'grab';
           useCanvasStore.getState().setHoveredElement(null);
+          useCanvasStore.getState().setHoveredConnection(null);
         }}
         onWheel={(event) => {
           event.evt.preventDefault();

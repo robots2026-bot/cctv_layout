@@ -527,13 +527,13 @@ const DevicePaletteItem = ({
   const bridgeBadgeStyles =
     bridgeRole === 'AP'
       ? {
-          borderColor: '#34d399',
-          color: '#bbf7d0',
-          backgroundColor: 'rgba(52, 211, 153, 0.18)'
+          borderColor: '#1d4ed8',
+          color: '#dbeafe',
+          backgroundColor: 'rgba(37, 99, 235, 0.18)'
         }
       : {
           borderColor: '#f97316',
-          color: '#fed7aa',
+          color: '#ffe6d5',
           backgroundColor: 'rgba(249, 115, 22, 0.18)'
         };
 

@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import {
+import type {
   CanvasBlueprint,
   CanvasConnection,
   CanvasElement,
   CanvasLayout,
   CanvasViewport,
-  DeviceSummary
+  DeviceSummary,
+  ConnectionKind
 } from '../types/canvas';
 import { nanoid } from '../utils/nanoid';
 import { useRealtimeStore } from './realtimeStore';
@@ -36,6 +37,7 @@ interface CanvasState {
   selectedElement: CanvasElement | null;
   selectedConnectionId: string | null;
   hoveredElementId: string | null;
+  hoveredConnectionId: string | null;
   contextMenu: CanvasContextMenu | null;
   linking: LinkingState;
   mode: CanvasMode;
@@ -58,6 +60,7 @@ interface CanvasState {
   updateElementPosition: (elementId: string, position: CanvasElement['position']) => void;
   updateElementMetadata: (elementId: string, updates: Partial<CanvasElement>) => void;
   setHoveredElement: (elementId: string | null) => void;
+  setHoveredConnection: (connectionId: string | null) => void;
   openContextMenu: (elementId: string, position: { x: number; y: number }) => void;
   closeContextMenu: () => void;
   setMode: (mode: CanvasMode) => void;
@@ -84,18 +87,26 @@ const defaultViewport: CanvasViewport = {
   position: { x: 0, y: 0 }
 };
 
-const getElementKey = (element: CanvasElement): string =>
-  element.deviceMac ?? element.deviceId ?? element.id;
-
-const matchesElementKey = (element: CanvasElement, key: string): boolean => {
-  if (!key) return false;
-  return (
-    element.id === key ||
-    element.deviceId === key ||
-    element.deviceMac === key ||
-    getElementKey(element) === key
-  );
+const collectElementKeys = (element: CanvasElement): string[] => {
+  const metadata = element.metadata as Record<string, unknown> | undefined;
+  const candidates = [
+    element.deviceId ?? undefined,
+    element.deviceMac ?? undefined,
+    element.id,
+    metadata?.sourceDeviceId as string | undefined,
+    metadata?.sourceDeviceMac as string | undefined
+  ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+  return Array.from(new Set(candidates));
 };
+
+const getElementKey = (element: CanvasElement): string =>
+  collectElementKeys(element)[0] ?? element.id;
+
+const matchesElementKey = (element: CanvasElement, key: string): boolean =>
+  collectElementKeys(element).includes(key);
+
+const preferElementKey = (element: CanvasElement): string =>
+  element.deviceId ?? element.deviceMac ?? element.id;
 
 const buildCategoryLookup = (elements: CanvasElement[]) => {
   const lookup = new Map<string, ReturnType<typeof getDeviceCategory>>();
@@ -112,6 +123,72 @@ const listConnectionsFor = (connections: CanvasConnection[], key: string) =>
 
 const resolveOtherKey = (connection: CanvasConnection, key: string) =>
   connection.fromDeviceId === key ? connection.toDeviceId : connection.fromDeviceId;
+
+const resolveElementBridgeRole = (element: CanvasElement | null | undefined): BridgeRole =>
+  element && getDeviceCategory(element.type) === 'bridge'
+    ? resolveBridgeRole(element.metadata as Record<string, unknown> | undefined, element.name)
+    : 'UNKNOWN';
+
+const determineConnectionOrientation = (
+  fromElement: CanvasElement,
+  toElement: CanvasElement,
+  fromKey: string,
+  toKey: string
+) => {
+  const normalizedFromKey =
+    fromElement.deviceId ?? fromElement.id ?? fromElement.deviceMac ?? fromKey;
+  const normalizedToKey =
+    toElement.deviceId ?? toElement.id ?? toElement.deviceMac ?? toKey;
+
+  const base = {
+    kind: 'wired' as ConnectionKind,
+    fromPoint: {
+      x: fromElement.position.x + fromElement.size.width / 2,
+      y: fromElement.position.y + fromElement.size.height / 2
+    },
+    toPoint: {
+      x: toElement.position.x + toElement.size.width / 2,
+      y: toElement.position.y + toElement.size.height / 2
+    },
+    fromKey: normalizedFromKey,
+    toKey: normalizedToKey
+  };
+
+  const fromCategory = getDeviceCategory(fromElement.type);
+  const toCategory = getDeviceCategory(toElement.type);
+
+  if (fromCategory !== 'bridge' || toCategory !== 'bridge') {
+    return base;
+  }
+
+  const fromRole = resolveElementBridgeRole(fromElement);
+  const toRole = resolveElementBridgeRole(toElement);
+
+  if (fromRole === 'AP' && toRole === 'ST') {
+    return {
+      ...base,
+      kind: 'wireless' as ConnectionKind
+    };
+  }
+
+  if (fromRole === 'ST' && toRole === 'AP') {
+    return {
+      kind: 'wireless' as ConnectionKind,
+      fromPoint: {
+        x: toElement.position.x + toElement.size.width / 2,
+        y: toElement.position.y + toElement.size.height / 2
+      },
+      toPoint: {
+        x: fromElement.position.x + fromElement.size.width / 2,
+        y: fromElement.position.y + fromElement.size.height / 2
+      },
+      fromKey: normalizedToKey,
+      toKey: normalizedFromKey
+    };
+  }
+
+  return base;
+};
 
 const createsCycle = (
   connections: CanvasConnection[],
@@ -290,6 +367,7 @@ export const useCanvasStore = create<CanvasState>()(
     selectedElement: null,
     selectedConnectionId: null,
     hoveredElementId: null,
+    hoveredConnectionId: null,
     mode: 'view',
     contextMenu: null,
     linking: { active: false, fromElementId: null, pointer: null },
@@ -368,44 +446,86 @@ export const useCanvasStore = create<CanvasState>()(
         };
       };
 
-      set({
-        elements: layout.elements
-          .filter((item): item is CanvasElement => Boolean(item) && !Array.isArray(item))
-          .map((element) => {
-            const metadata = (element.metadata ?? {}) as Record<string, unknown>;
-            if (!metadata.sourceDeviceId && element.deviceId) {
-              metadata.sourceDeviceId = element.deviceId;
+      const nextElements = layout.elements
+        .filter((item): item is CanvasElement => Boolean(item) && !Array.isArray(item))
+        .map((element) => {
+          const metadata = (element.metadata ?? {}) as Record<string, unknown>;
+          if (!metadata.sourceDeviceId && element.deviceId) {
+            metadata.sourceDeviceId = element.deviceId;
+          }
+          if (!metadata.sourceDeviceMac && (element as CanvasElement).deviceMac) {
+            metadata.sourceDeviceMac = (element as CanvasElement).deviceMac;
+          }
+          return {
+            ...element,
+            deviceMac:
+              (element as CanvasElement).deviceMac ??
+              (metadata.sourceDeviceMac as string | undefined) ??
+              null,
+            metadata,
+            position: element.position ?? { x: 0, y: 0 },
+            size: element.size ?? { width: 150, height: 70 },
+            selected: false
+          };
+        });
+
+      const findElementByKey = (key?: string | null) => {
+        if (!key) return null;
+        return (
+          nextElements.find((item) => {
+            if (matchesElementKey(item, key)) {
+              return true;
             }
-            if (!metadata.sourceDeviceMac && (element as CanvasElement).deviceMac) {
-              metadata.sourceDeviceMac = (element as CanvasElement).deviceMac;
-            }
+            const metadata = item.metadata as Record<string, unknown> | undefined;
+            const sourceId = metadata?.sourceDeviceId as string | undefined;
+            const sourceMac = metadata?.sourceDeviceMac as string | undefined;
+            return sourceId === key || sourceMac === key;
+          }) ?? null
+        );
+      };
+
+      const nextConnections = layout.connections
+        .filter((item): item is CanvasConnection => Boolean(item) && !Array.isArray(item))
+        .map((connection) => {
+          const rawFromKey = connection.fromDeviceId ?? connection.id;
+          const rawToKey = connection.toDeviceId ?? connection.id;
+          const fromElement = findElementByKey(rawFromKey);
+          const toElement = findElementByKey(rawToKey);
+
+          if (fromElement && toElement && rawFromKey && rawToKey) {
+            const orientation = determineConnectionOrientation(fromElement, toElement, rawFromKey, rawToKey);
             return {
-              ...element,
-              deviceMac:
-                (element as CanvasElement).deviceMac ??
-                (metadata.sourceDeviceMac as string | undefined) ??
-                null,
-              metadata,
-              position: element.position ?? { x: 0, y: 0 },
-              size: element.size ?? { width: 150, height: 70 },
+              ...connection,
+              from: orientation.fromPoint,
+              to: orientation.toPoint,
+              fromDeviceId: orientation.fromKey,
+              toDeviceId: orientation.toKey,
+              kind: orientation.kind === 'wireless' ? 'wireless' : connection.kind ?? 'wired',
+              bandwidth: connection.bandwidth ?? {},
+              status: connection.status ?? 'online',
               selected: false
             };
-          }),
-        connections: layout.connections
-          .filter((item): item is CanvasConnection => Boolean(item) && !Array.isArray(item))
-          .map((connection) => ({
+          }
+
+          return {
             ...connection,
             from: connection.from ?? { x: 0, y: 0 },
             to: connection.to ?? { x: 0, y: 0 },
             bandwidth: connection.bandwidth ?? {},
             status: connection.status ?? 'online',
             selected: false
-          })),
+          };
+        });
+
+      set({
+        elements: nextElements,
+        connections: nextConnections,
         background: layout.background ? { url: layout.background.url } : null,
         blueprint: sanitizeBlueprint(layout.blueprint ?? null),
         selectedElement: null,
         selectedConnectionId: null,
         hoveredElementId: null,
+        hoveredConnectionId: null,
         contextMenu: null,
         linking: { active: false, fromElementId: null, pointer: null },
         mode: 'view',
@@ -574,6 +694,14 @@ export const useCanvasStore = create<CanvasState>()(
       set(() => ({
         hoveredElementId: elementId
       })),
+    setHoveredConnection: (connectionId) =>
+      set((state) =>
+        state.hoveredConnectionId === connectionId
+          ? state
+          : {
+              hoveredConnectionId: connectionId
+            }
+      ),
     openContextMenu: (elementId, position) =>
       set(() => {
         const menuWidth = 160;
@@ -603,6 +731,7 @@ export const useCanvasStore = create<CanvasState>()(
           linking: linkingState,
           contextMenu: null,
           hoveredElementId: shouldClearSelection ? null : state.hoveredElementId,
+          hoveredConnectionId: shouldClearSelection ? null : state.hoveredConnectionId,
           selectedElement: shouldClearSelection ? null : state.selectedElement,
           selectedConnectionId: shouldClearSelection ? null : state.selectedConnectionId
         };
@@ -661,14 +790,20 @@ export const useCanvasStore = create<CanvasState>()(
             linking: { active: false, fromElementId: null, pointer: null }
           };
         }
-        const fromDeviceKey = getElementKey(fromElement);
-        const toDeviceKey = getElementKey(toElement);
+        const fromKeyCandidates = new Set([
+          ...collectElementKeys(fromElement),
+          preferElementKey(fromElement)
+        ]);
+        const toKeyCandidates = new Set([
+          ...collectElementKeys(toElement),
+          preferElementKey(toElement)
+        ]);
         const exists = state.connections.some((connection) => {
           const fromKey = connection.fromDeviceId ?? connection.id;
           const toKey = connection.toDeviceId ?? connection.id;
           return (
-            (fromKey === fromDeviceKey && toKey === toDeviceKey) ||
-            (fromKey === toDeviceKey && toKey === fromDeviceKey)
+            (fromKeyCandidates.has(fromKey) && toKeyCandidates.has(toKey)) ||
+            (fromKeyCandidates.has(toKey) && toKeyCandidates.has(fromKey))
           );
         });
         if (exists) {
@@ -683,17 +818,19 @@ export const useCanvasStore = create<CanvasState>()(
             linking: { active: true, fromElementId: null, pointer: null }
           };
         }
-        const center = (element: CanvasElement) => ({
-          x: element.position.x + element.size.width / 2,
-          y: element.position.y + element.size.height / 2
-        });
+        const orientation = determineConnectionOrientation(
+          fromElement,
+          toElement,
+          preferElementKey(fromElement),
+          preferElementKey(toElement)
+        );
         const newConnection: CanvasConnection = {
           id: nanoid(),
-          from: center(fromElement),
-          to: center(toElement),
-          kind: 'wired',
-          fromDeviceId: fromDeviceKey,
-          toDeviceId: toDeviceKey,
+          from: orientation.fromPoint,
+          to: orientation.toPoint,
+          kind: orientation.kind,
+          fromDeviceId: orientation.fromKey,
+          toDeviceId: orientation.toKey,
           status: 'online',
           bandwidth: {}
         };
@@ -725,14 +862,20 @@ export const useCanvasStore = create<CanvasState>()(
             linking: { active: false, fromElementId: null, pointer: null }
           };
         }
-        const fromDeviceKey = getElementKey(fromElement);
-        const toDeviceKey = getElementKey(toElement);
+        const fromKeyCandidates = new Set([
+          ...collectElementKeys(fromElement),
+          preferElementKey(fromElement)
+        ]);
+        const toKeyCandidates = new Set([
+          ...collectElementKeys(toElement),
+          preferElementKey(toElement)
+        ]);
         const exists = state.connections.some((connection) => {
           const fromKey = connection.fromDeviceId ?? connection.id;
           const toKey = connection.toDeviceId ?? connection.id;
           return (
-            (fromKey === fromDeviceKey && toKey === toDeviceKey) ||
-            (fromKey === toDeviceKey && toKey === fromDeviceKey)
+            (fromKeyCandidates.has(fromKey) && toKeyCandidates.has(toKey)) ||
+            (fromKeyCandidates.has(toKey) && toKeyCandidates.has(fromKey))
           );
         });
         if (exists) {
@@ -747,17 +890,19 @@ export const useCanvasStore = create<CanvasState>()(
             linking: { active: true, fromElementId: null, pointer: null }
           };
         }
-        const center = (element: CanvasElement) => ({
-          x: element.position.x + element.size.width / 2,
-          y: element.position.y + element.size.height / 2
-        });
+        const orientation = determineConnectionOrientation(
+          fromElement,
+          toElement,
+          preferElementKey(fromElement),
+          preferElementKey(toElement)
+        );
         const newConnection: CanvasConnection = {
           id: nanoid(),
-          from: center(fromElement),
-          to: center(toElement),
-          kind: 'wired',
-          fromDeviceId: fromDeviceKey,
-          toDeviceId: toDeviceKey,
+          from: orientation.fromPoint,
+          to: orientation.toPoint,
+          kind: orientation.kind,
+          fromDeviceId: orientation.fromKey,
+          toDeviceId: orientation.toKey,
           status: 'online',
           bandwidth: {}
         };
@@ -772,6 +917,8 @@ export const useCanvasStore = create<CanvasState>()(
         connections: state.connections.filter((connection) => connection.id !== connectionId),
         selectedConnectionId:
           state.selectedConnectionId === connectionId ? null : state.selectedConnectionId,
+        hoveredConnectionId:
+          state.hoveredConnectionId === connectionId ? null : state.hoveredConnectionId,
         contextMenu: null,
         isDirty: true
       })),
@@ -816,17 +963,25 @@ export const useCanvasStore = create<CanvasState>()(
             useRealtimeStore.getState().restoreDevice(restored);
           }
         }
+        const filteredConnections = state.connections.filter((connection) => {
+          const fromKey = connection.fromDeviceId ?? connection.id;
+          const toKey = connection.toDeviceId ?? connection.id;
+          return !targetKeys.includes(fromKey) && !targetKeys.includes(toKey);
+        });
+
+        const hoveredConnectionId = state.hoveredConnectionId;
+        const nextHoveredConnectionId = hoveredConnectionId && filteredConnections.some((connection) => connection.id === hoveredConnectionId)
+          ? hoveredConnectionId
+          : null;
+
         return {
           elements: state.elements.filter((element) => element.id !== elementId),
-          connections: state.connections.filter((connection) => {
-            const fromKey = connection.fromDeviceId ?? connection.id;
-            const toKey = connection.toDeviceId ?? connection.id;
-            return !targetKeys.includes(fromKey) && !targetKeys.includes(toKey);
-          }),
+          connections: filteredConnections,
           selectedElement:
             state.selectedElement?.id === elementId ? null : state.selectedElement,
           selectedConnectionId: null,
           hoveredElementId: state.hoveredElementId === elementId ? null : state.hoveredElementId,
+          hoveredConnectionId: nextHoveredConnectionId,
           contextMenu: null,
           linking: { active: false, fromElementId: null, pointer: null },
           isDirty: true
@@ -840,6 +995,7 @@ export const useCanvasStore = create<CanvasState>()(
         connections: [],
         selectedElement: null,
         hoveredElementId: null,
+        hoveredConnectionId: null,
         contextMenu: null,
         linking: { active: false, fromElementId: null, pointer: null },
         background: null,
@@ -851,10 +1007,15 @@ export const useCanvasStore = create<CanvasState>()(
         lastFocusCenter: null,
         lastSavedAt: Date.now()
       }),
-    setLocked: (locked) => set({ isLocked: locked }),
+    setLocked: (locked) =>
+      set((state) => ({
+        isLocked: locked,
+        hoveredConnectionId: locked ? null : state.hoveredConnectionId
+      })),
     toggleLocked: () =>
       set((state) => ({
-        isLocked: !state.isLocked
+        isLocked: !state.isLocked,
+        hoveredConnectionId: state.isLocked ? state.hoveredConnectionId : null
       })),
     focusAllElements: () =>
       set((state) => {

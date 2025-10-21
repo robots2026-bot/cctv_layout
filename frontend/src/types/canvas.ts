@@ -26,11 +26,13 @@ export interface ConnectionBandwidth {
 
 export type ConnectionStatus = 'online' | 'offline' | 'warning';
 
+export type ConnectionKind = 'wired' | 'wireless';
+
 export interface CanvasConnection {
   id: string;
   from: { x: number; y: number };
   to: { x: number; y: number };
-  kind: 'wired' | 'wireless';
+  kind: ConnectionKind;
   fromDeviceId?: string;
   toDeviceId?: string;
   bandwidth?: ConnectionBandwidth;

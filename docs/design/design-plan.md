@@ -41,6 +41,7 @@
   - 画布组件：`CanvasStage`、`DeviceNode`、`ConnectionLine`、`GridBackground`，严格区分展示型与容器型组件；蓝图相关能力拆分为 `BlueprintLayer` 与 `BlueprintControls`，由 `canvasStore.mode` 中的 `blueprint` 态控制交互，保持背景缩放/位置逻辑独立并防止误操作。
   - 侧栏组件：`DevicePalette`（可拖拽列表，使用图形化图标与绿色/深灰背景区分设备在线状态；网桥节点追加 AP/ST 徽章，快速识别上下行角色）、`PropertyPanel`、`VersionHistory`。
   - 交换机仅展示名称，不支持别名；上下文菜单仅保留“隐藏”，避免与其它设备共享的别名编辑入口。
+  - 网桥连线约束：同一项目的网桥节点按角色渲染不同的连接类型。`AP ⇄ ST` 使用带方向的双虚线表示桥接链路；`AP`/`ST` 与其他设备之间使用实线；`AP ⇄ AP`、`ST ⇄ ST` 不允许绘制双虚线以防止错误拓扑。
   - 调试组件：`GatewayMockForm` 负责收集基础字段，`MockDeviceTable` 支撑设备行编辑与批量导入，`PayloadPreview` 展示实时 JSON 与校验告警，`MockSendResult` 输出后端响应与错误提示。
 - **性能策略**：
   - 使用 `react-konva` 的 `FastLayer` 渲染大量静态图元。

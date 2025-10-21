@@ -72,15 +72,28 @@ const calculateConnectionSegments = (
 };
 
 export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
-  const { elements, selectConnection, mode } = useCanvasStore((state) => ({
+  const { elements, selectConnection, mode, hoveredConnectionId, setHoveredConnection, isLocked } = useCanvasStore((state) => ({
     elements: state.elements,
     selectConnection: state.selectConnection,
-    mode: state.mode
+    mode: state.mode,
+    hoveredConnectionId: state.hoveredConnectionId,
+    setHoveredConnection: state.setHoveredConnection,
+    isLocked: state.isLocked
   }));
   const isBlueprintEditing = mode === 'blueprint';
 
-  const findElementByKey = (deviceKey?: string) =>
-    deviceKey ? elements.find((item) => item.deviceId === deviceKey || item.id === deviceKey) : undefined;
+  const findElementByKey = (deviceKey?: string) => {
+    if (!deviceKey) return undefined;
+    return elements.find((item) => {
+      if (item.deviceId === deviceKey || item.id === deviceKey || item.deviceMac === deviceKey) {
+        return true;
+      }
+      const metadata = item.metadata as Record<string, unknown> | undefined;
+      const sourceId = metadata?.sourceDeviceId as string | undefined;
+      const sourceMac = metadata?.sourceDeviceMac as string | undefined;
+      return sourceId === deviceKey || sourceMac === deviceKey;
+    });
+  };
 
   const fromElement = findElementByKey(connection.fromDeviceId);
   const toElement = findElementByKey(connection.toDeviceId);
@@ -102,30 +115,66 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
     return null;
   }
 
-  const dx = toPoint.x - fromPoint.x;
-  const dy = toPoint.y - fromPoint.y;
+  const baseFromCategory = getDeviceCategory(fromElement?.type);
+  const baseToCategory = getDeviceCategory(toElement?.type);
+  const baseFromRole =
+    baseFromCategory === 'bridge'
+      ? resolveBridgeRole(fromElement?.metadata as Record<string, unknown> | undefined, fromElement?.name)
+      : 'UNKNOWN';
+  const baseToRole =
+    baseToCategory === 'bridge'
+      ? resolveBridgeRole(toElement?.metadata as Record<string, unknown> | undefined, toElement?.name)
+      : 'UNKNOWN';
+
+  let orientedFromPoint = fromPoint;
+  let orientedToPoint = toPoint;
+  let orientedFromCategory = baseFromCategory;
+  let orientedToCategory = baseToCategory;
+  let orientedFromRole = baseFromRole;
+  let orientedToRole = baseToRole;
+  let isWireless = connection.kind === 'wireless';
+  const isBridgePair = baseFromCategory === 'bridge' && baseToCategory === 'bridge';
+  const rolesComplementary =
+    isBridgePair &&
+    ((baseFromRole === 'AP' && baseToRole === 'ST') || (baseFromRole === 'ST' && baseToRole === 'AP'));
+
+  if (rolesComplementary) {
+    if (!(baseFromRole === 'AP' && baseToRole === 'ST')) {
+      orientedFromPoint = toPoint;
+      orientedToPoint = fromPoint;
+      orientedFromCategory = baseToCategory;
+      orientedToCategory = baseFromCategory;
+      orientedFromRole = baseToRole;
+      orientedToRole = baseFromRole;
+    }
+    if (!isWireless) {
+      isWireless = true;
+    }
+  } else if (isWireless) {
+    // 数据异常或角色缺失时降级为普通连线
+    isWireless = false;
+  }
+
+  const dx = orientedToPoint.x - orientedFromPoint.x;
+  const dy = orientedToPoint.y - orientedFromPoint.y;
   const length = Math.hypot(dx, dy);
   if (length === 0) {
     return null;
   }
 
-  const fromCategory = getDeviceCategory(fromElement?.type);
-  const toCategory = getDeviceCategory(toElement?.type);
-  const fromBridgeRole = fromCategory === 'bridge' ? resolveBridgeRole(fromElement?.metadata as Record<string, unknown> | undefined, fromElement?.name) : 'UNKNOWN';
-  const toBridgeRole = toCategory === 'bridge' ? resolveBridgeRole(toElement?.metadata as Record<string, unknown> | undefined, toElement?.name) : 'UNKNOWN';
-  const isBridgeToBridge = fromCategory === 'bridge' && toCategory === 'bridge';
-  const isApToSt =
-    isBridgeToBridge &&
-    ((fromBridgeRole === 'AP' && toBridgeRole === 'ST') || (fromBridgeRole === 'ST' && toBridgeRole === 'AP'));
-
-  const shouldUseDualTrack = isApToSt;
+  const shouldUseDualTrack =
+    isWireless &&
+    orientedFromCategory === 'bridge' &&
+    orientedToCategory === 'bridge' &&
+    orientedFromRole === 'AP' &&
+    orientedToRole === 'ST';
 
   const segments = shouldUseDualTrack
-    ? calculateConnectionSegments(fromPoint, toPoint, connection.kind)
+    ? calculateConnectionSegments(orientedFromPoint, orientedToPoint, 'wireless')
     : null;
 
-  const upstream = segments?.upstream ?? { start: fromPoint, end: toPoint };
-  const downstream = segments?.downstream ?? { start: fromPoint, end: toPoint };
+  const upstream = segments?.upstream ?? { start: orientedFromPoint, end: orientedToPoint };
+  const downstream = segments?.downstream ?? { start: orientedFromPoint, end: orientedToPoint };
   const baseDash = shouldUseDualTrack ? [10, 6] : undefined;
 
   const status = getStatusVisual(connection.status ?? 'online');
@@ -197,14 +246,6 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
     y: dy / length
   };
 
-  const handleClick = (event: KonvaEventObject<MouseEvent>) => {
-    if (mode === 'view' || isBlueprintEditing) {
-      return;
-    }
-    event.cancelBubble = true;
-    selectConnection(connection.id);
-  };
-
   const handleContextMenu = (event: KonvaEventObject<MouseEvent>) => {
     if (mode === 'view' || isBlueprintEditing) {
       return;
@@ -215,18 +256,52 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
     useCanvasStore.getState().openContextMenu(connection.id, { x: clientX, y: clientY });
   };
 
-  const strokeWidthMain = connection.selected ? 5 : 4;
-  const strokeWidthSecondary = connection.selected ? 4.5 : 4;
-  const arrowOpacityMain = connection.selected ? 1 : 0.9;
-  const downstreamOpacity = connection.selected ? 0.75 : 0.65;
+  const handleMouseEnter = (event: KonvaEventObject<MouseEvent>) => {
+    if (isBlueprintEditing || mode !== 'linking' || isLocked) {
+      return;
+    }
+    setHoveredConnection(connection.id);
+    const stage = event.target.getStage();
+    if (stage) {
+      stage.container().style.cursor = 'pointer';
+    }
+  };
+
+  const handleMouseLeave = (event: KonvaEventObject<MouseEvent>) => {
+    const stage = event.target.getStage();
+    if (stage) {
+      stage.container().style.cursor = 'default';
+    }
+    setHoveredConnection(null);
+  };
+
+  const isHovered =
+    !connection.selected && hoveredConnectionId === connection.id && mode === 'linking' && !isLocked;
+
+  const strokeWidthMain = connection.selected ? 5.4 : isHovered ? 4.8 : 4;
+  const strokeWidthSecondary = connection.selected ? 5 : isHovered ? 4.4 : 4;
+  const arrowOpacityMain = connection.selected ? 1 : isHovered ? 0.95 : 0.9;
+  const downstreamOpacity = connection.selected ? 0.78 : isHovered ? 0.7 : 0.65;
+  const lineShadowBlur = connection.selected ? 12 : isHovered ? 7 : 0;
+  const lineShadowOpacity = connection.selected ? 0.85 : isHovered ? 0.55 : 0;
 
   return (
-    <Group listening={!isBlueprintEditing} onClick={handleClick} onContextMenu={handleContextMenu}>
+    <Group
+      listening={!isBlueprintEditing}
+      onContextMenu={handleContextMenu}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       <Line
         points={makePoints(upstream.start, upstream.end)}
         stroke={status.fill}
         strokeWidth={strokeWidthMain}
         dash={baseDash}
+        hitStrokeWidth={28}
+        shadowEnabled={lineShadowBlur > 0}
+        shadowColor={status.fill}
+        shadowBlur={lineShadowBlur}
+        shadowOpacity={lineShadowOpacity}
       />
       {shouldUseDualTrack && (
         <Line
@@ -235,6 +310,11 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
           opacity={downstreamOpacity}
           strokeWidth={strokeWidthSecondary}
           dash={baseDash}
+          hitStrokeWidth={28}
+          shadowEnabled={lineShadowBlur > 0}
+          shadowColor={status.fill}
+          shadowBlur={lineShadowBlur}
+          shadowOpacity={lineShadowOpacity * 0.9}
         />
       )}
 

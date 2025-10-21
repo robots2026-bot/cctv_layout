@@ -51,6 +51,13 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
 
     if (category === 'bridge') {
       const badgeLabel = bridgeRole === 'AP' ? 'AP' : bridgeRole === 'ST' ? 'ST' : null;
+      const badgeFill =
+        bridgeRole === 'AP'
+          ? 'rgba(37, 99, 235, 0.88)'
+          : bridgeRole === 'ST'
+          ? 'rgba(249, 115, 22, 0.9)'
+          : 'rgba(148, 163, 184, 0.85)';
+      const badgeTextColor = bridgeRole === 'ST' ? '#fff7ed' : '#f8fafc';
       return (
         <Group>
           <Rect x={8} y={2} width={18} height={32} cornerRadius={3} fill={baseFill} stroke={accent} strokeWidth={2} />
@@ -59,14 +66,14 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
           <Circle x={17} y={26} radius={2.5} fill={accent} opacity={0.4} />
           {badgeLabel && (
             <Group x={6} y={36}>
-              <Rect width={24} height={14} fill="#1d4ed8" cornerRadius={4} opacity={0.85} />
+              <Rect width={28} height={16} fill={badgeFill} cornerRadius={6} />
               <Text
                 text={badgeLabel}
                 fontSize={10}
                 fontStyle="bold"
-                fill="#f8fafc"
-                width={24}
-                height={14}
+                fill={badgeTextColor}
+                width={28}
+                height={16}
                 verticalAlign="middle"
                 align="center"
               />
