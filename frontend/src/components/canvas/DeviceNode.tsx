@@ -1,15 +1,16 @@
 import { Circle, Group, Rect, Text } from 'react-konva';
+import { memo, useEffect, useRef } from 'react';
 import { CanvasElement } from '../../types/canvas';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { deriveSwitchLabel, getDeviceCategory, getStatusVisual } from '../../utils/deviceVisual';
 import { resolveBridgeRole } from '../../utils/bridgeRole';
-import { useRef } from 'react';
+import { shallow } from 'zustand/shallow';
 
 interface DeviceNodeProps {
   element: CanvasElement;
 }
 
-export const DeviceNode = ({ element }: DeviceNodeProps) => {
+const DeviceNodeComponent = ({ element }: DeviceNodeProps) => {
   const groupRef = useRef<import('konva/lib/Group').Group>(null);
   const {
     hoveredElementId,
@@ -21,19 +22,37 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
     startLinking,
     completeLinking,
     mode,
-    isLocked
-  } = useCanvasStore((state) => ({
-    hoveredElementId: state.hoveredElementId,
-    setHoveredElement: state.setHoveredElement,
-    openContextMenu: state.openContextMenu,
-    closeContextMenu: state.closeContextMenu,
-    linking: state.linking,
-    cancelLinking: state.cancelLinking,
-    startLinking: state.startLinking,
-    completeLinking: state.completeLinking,
-    mode: state.mode,
-    isLocked: state.isLocked
-  }));
+    isLocked,
+    updateElementPosition
+  } = useCanvasStore(
+    (state) => ({
+      hoveredElementId: state.hoveredElementId,
+      setHoveredElement: state.setHoveredElement,
+      openContextMenu: state.openContextMenu,
+      closeContextMenu: state.closeContextMenu,
+      linking: state.linking,
+      cancelLinking: state.cancelLinking,
+      startLinking: state.startLinking,
+      completeLinking: state.completeLinking,
+      mode: state.mode,
+      isLocked: state.isLocked,
+      updateElementPosition: state.updateElementPosition
+    }),
+    shallow
+  );
+  const rafHandleRef = useRef<number | null>(null);
+  const pendingPositionRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(
+    () => () => {
+      if (rafHandleRef.current !== null) {
+        cancelAnimationFrame(rafHandleRef.current);
+        rafHandleRef.current = null;
+      }
+      pendingPositionRef.current = null;
+    },
+    []
+  );
   const isBlueprintEditing = mode === 'blueprint';
   const isHovered = hoveredElementId === element.id;
 
@@ -105,10 +124,19 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
         if (isBlueprintEditing || isLocked) {
           return;
         }
-        useCanvasStore.getState().updateElementPosition(element.id, {
+        pendingPositionRef.current = {
           x: event.target.x(),
           y: event.target.y()
-        });
+        };
+        if (rafHandleRef.current === null) {
+          rafHandleRef.current = requestAnimationFrame(() => {
+            rafHandleRef.current = null;
+            const nextPosition = pendingPositionRef.current;
+            if (!nextPosition) return;
+            updateElementPosition(element.id, nextPosition);
+            pendingPositionRef.current = null;
+          });
+        }
       }}
       onMouseEnter={() => {
         if (isBlueprintEditing) return;
@@ -186,6 +214,26 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
         closeContextMenu();
         event.target.moveToTop();
         event.target.getLayer()?.batchDraw();
+      }}
+      onDragEnd={(event) => {
+        if (isBlueprintEditing || isLocked) {
+          event.cancelBubble = true;
+          return;
+        }
+        if (mode !== 'layout') {
+          event.cancelBubble = true;
+          return;
+        }
+        if (rafHandleRef.current !== null) {
+          cancelAnimationFrame(rafHandleRef.current);
+          rafHandleRef.current = null;
+        }
+        const finalPosition = {
+          x: event.target.x(),
+          y: event.target.y()
+        };
+        pendingPositionRef.current = null;
+        updateElementPosition(element.id, finalPosition);
       }}
       onContextMenu={(event) => {
         if (isBlueprintEditing || isLocked) {
@@ -268,3 +316,6 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
     </Group>
   );
 };
+
+export const DeviceNode = memo(DeviceNodeComponent);
+DeviceNode.displayName = 'DeviceNode';

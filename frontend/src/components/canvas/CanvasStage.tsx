@@ -17,6 +17,7 @@ import { KonvaEventObject } from 'konva/lib/Node';
 import { nanoid } from '../../utils/nanoid';
 import { uploadBlueprintFile } from '../../services/fileUploads';
 import { useLayoutStore } from '../../stores/layoutStore';
+import { shallow } from 'zustand/shallow';
 
 const formatBytes = (bytes: number) => {
   if (bytes >= 1024 * 1024) {
@@ -31,14 +32,17 @@ const formatBytes = (bytes: number) => {
 export const CanvasStage = () => {
   const stageRef = useRef<KonvaStage | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const { viewport, setViewport, background, elements, connections, mode } = useCanvasStore((state) => ({
-    viewport: state.viewport,
-    setViewport: state.setViewport,
-    background: state.background,
-    elements: state.elements,
-    connections: state.connections,
-    mode: state.mode
-  }));
+  const { viewport, setViewport, background, elements, connections, mode } = useCanvasStore(
+    (state) => ({
+      viewport: state.viewport,
+      setViewport: state.setViewport,
+      background: state.background,
+      elements: state.elements,
+      connections: state.connections,
+      mode: state.mode
+    }),
+    shallow
+  );
   const addNotification = useUIStore((state) => state.addNotification);
   const [image] = useImage(background?.url ?? '', 'anonymous');
   const [dimensions, setDimensions] = useState({ width: viewport.width, height: viewport.height });

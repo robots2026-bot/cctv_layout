@@ -5,6 +5,7 @@ import { useLayoutStore } from '../../stores/layoutStore';
 import { useRealtimeStore } from '../../stores/realtimeStore';
 import { useUIStore } from '../../stores/uiStore';
 import { getDeviceCategory } from '../../utils/deviceVisual';
+import { shallow } from 'zustand/shallow';
 
 export const CanvasContextMenu = () => {
   const {
@@ -17,17 +18,20 @@ export const CanvasContextMenu = () => {
     mode,
     isLocked,
     updateElementMetadata
-  } = useCanvasStore((state) => ({
-    contextMenu: state.contextMenu,
-    removeElement: state.removeElement,
-    removeConnection: state.removeConnection,
-    closeContextMenu: state.closeContextMenu,
-    connections: state.connections,
-    elements: state.elements,
-    mode: state.mode,
-    isLocked: state.isLocked,
-    updateElementMetadata: state.updateElementMetadata
-  }));
+  } = useCanvasStore(
+    (state) => ({
+      contextMenu: state.contextMenu,
+      removeElement: state.removeElement,
+      removeConnection: state.removeConnection,
+      closeContextMenu: state.closeContextMenu,
+      connections: state.connections,
+      elements: state.elements,
+      mode: state.mode,
+      isLocked: state.isLocked,
+      updateElementMetadata: state.updateElementMetadata
+    }),
+    shallow
+  );
   const layout = useLayoutStore((state) => state.layout);
   const { addNotification, openAliasDialog } = useUIStore((state) => ({
     addNotification: state.addNotification,

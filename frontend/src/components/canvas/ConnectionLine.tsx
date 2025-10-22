@@ -1,9 +1,32 @@
 import { Arrow, Group, Label, Line, Tag, Text } from 'react-konva';
+import { memo, useMemo } from 'react';
 import { CanvasConnection } from '../../types/canvas';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { getDeviceCategory, getStatusVisual } from '../../utils/deviceVisual';
 import { resolveBridgeRole } from '../../utils/bridgeRole';
 import type { KonvaEventObject } from 'konva/lib/Node';
+import { shallow } from 'zustand/shallow';
+
+type CanvasStoreState = ReturnType<typeof useCanvasStore.getState>;
+
+const findElementByKey = (elements: CanvasStoreState['elements'], deviceKey?: string) => {
+  if (!deviceKey) return undefined;
+  return elements.find((item) => {
+    if (item.deviceId === deviceKey || item.id === deviceKey || item.deviceMac === deviceKey) {
+      return true;
+    }
+    const metadata = item.metadata as Record<string, unknown> | undefined;
+    const sourceId = metadata?.sourceDeviceId as string | undefined;
+    const sourceMac = metadata?.sourceDeviceMac as string | undefined;
+    return sourceId === deviceKey || sourceMac === deviceKey;
+  });
+};
+
+const createEndpointSelector = (fromKey?: string, toKey?: string) =>
+  (state: CanvasStoreState) => ({
+    fromElement: findElementByKey(state.elements, fromKey),
+    toElement: findElementByKey(state.elements, toKey)
+  });
 
 interface ConnectionLineProps {
   connection: CanvasConnection;
@@ -71,32 +94,25 @@ const calculateConnectionSegments = (
   };
 };
 
-export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
-  const { elements, selectConnection, mode, hoveredConnectionId, setHoveredConnection, isLocked } = useCanvasStore((state) => ({
-    elements: state.elements,
-    selectConnection: state.selectConnection,
-    mode: state.mode,
-    hoveredConnectionId: state.hoveredConnectionId,
-    setHoveredConnection: state.setHoveredConnection,
-    isLocked: state.isLocked
-  }));
+const ConnectionLineComponent = ({ connection }: ConnectionLineProps) => {
+  const { selectConnection, mode, hoveredConnectionId, setHoveredConnection, isLocked } = useCanvasStore(
+    (state) => ({
+      selectConnection: state.selectConnection,
+      mode: state.mode,
+      hoveredConnectionId: state.hoveredConnectionId,
+      setHoveredConnection: state.setHoveredConnection,
+      isLocked: state.isLocked
+    }),
+    shallow
+  );
+  const { fromElement, toElement } = useCanvasStore(
+    useMemo(
+      () => createEndpointSelector(connection.fromDeviceId, connection.toDeviceId),
+      [connection.fromDeviceId, connection.toDeviceId]
+    ),
+    shallow
+  );
   const isBlueprintEditing = mode === 'blueprint';
-
-  const findElementByKey = (deviceKey?: string) => {
-    if (!deviceKey) return undefined;
-    return elements.find((item) => {
-      if (item.deviceId === deviceKey || item.id === deviceKey || item.deviceMac === deviceKey) {
-        return true;
-      }
-      const metadata = item.metadata as Record<string, unknown> | undefined;
-      const sourceId = metadata?.sourceDeviceId as string | undefined;
-      const sourceMac = metadata?.sourceDeviceMac as string | undefined;
-      return sourceId === deviceKey || sourceMac === deviceKey;
-    });
-  };
-
-  const fromElement = findElementByKey(connection.fromDeviceId);
-  const toElement = findElementByKey(connection.toDeviceId);
 
   const resolvePoint = (element: typeof fromElement, fallback?: { x: number; y: number }) => {
     if (element) {
@@ -373,3 +389,6 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
     </Group>
   );
 };
+
+export const ConnectionLine = memo(ConnectionLineComponent);
+ConnectionLine.displayName = 'ConnectionLine';
