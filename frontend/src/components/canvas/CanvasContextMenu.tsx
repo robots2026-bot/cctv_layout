@@ -1,6 +1,10 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useCanvasStore } from '../../stores/canvasStore';
+import { useLayoutStore } from '../../stores/layoutStore';
+import { useRealtimeStore } from '../../stores/realtimeStore';
+import { useUIStore } from '../../stores/uiStore';
+import { getDeviceCategory } from '../../utils/deviceVisual';
 
 export const CanvasContextMenu = () => {
   const {
@@ -10,7 +14,9 @@ export const CanvasContextMenu = () => {
     closeContextMenu,
     connections,
     elements,
-    mode
+    mode,
+    isLocked,
+    updateElementMetadata
   } = useCanvasStore((state) => ({
     contextMenu: state.contextMenu,
     removeElement: state.removeElement,
@@ -18,7 +24,14 @@ export const CanvasContextMenu = () => {
     closeContextMenu: state.closeContextMenu,
     connections: state.connections,
     elements: state.elements,
-    mode: state.mode
+    mode: state.mode,
+    isLocked: state.isLocked,
+    updateElementMetadata: state.updateElementMetadata
+  }));
+  const layout = useLayoutStore((state) => state.layout);
+  const { addNotification, openAliasDialog } = useUIStore((state) => ({
+    addNotification: state.addNotification,
+    openAliasDialog: state.openAliasDialog
   }));
 
   useEffect(() => {
@@ -61,6 +74,48 @@ export const CanvasContextMenu = () => {
     closeContextMenu();
   };
 
+  const handleEditAlias = () => {
+    if (!element || !element.deviceId || !layout) {
+      return;
+    }
+    const category = getDeviceCategory(element.type);
+    if (category === 'switch') {
+      return;
+    }
+    openAliasDialog({
+      title: '编辑设备别名',
+      confirmLabel: '保存',
+      initialValue: element.name ?? '',
+      onConfirm: async (nextName: string) => {
+        try {
+          await useRealtimeStore
+            .getState()
+            .updateDeviceName(layout.projectId, element.deviceId!, { name: nextName });
+          updateElementMetadata(element.id, {
+            name: nextName,
+            metadata: {
+              ...(element.metadata ?? {}),
+              sourceAlias: nextName
+            }
+          });
+          addNotification({
+            id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+            title: '别名已更新',
+            message: `设备已更新为 “${nextName}”。`,
+            level: 'info'
+          });
+        } catch (error) {
+          console.error('更新设备别名失败', error);
+          throw new Error('更新设备别名失败，请稍后重试');
+        }
+      }
+    });
+    closeContextMenu();
+  };
+
+  const canEditAlias =
+    !isConnection && element && element.deviceId && layout && getDeviceCategory(element.type) !== 'switch';
+
   return createPortal(
     <div
       data-canvas-context-menu
@@ -68,6 +123,16 @@ export const CanvasContextMenu = () => {
       style={{ position: 'fixed', top: position.y, left: position.x, minWidth: 140 }}
       onMouseDown={(event) => event.stopPropagation()}
     >
+      {canEditAlias && !isLocked && (
+        <button
+          type="button"
+          onClick={handleEditAlias}
+          className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sky-100 transition hover:bg-slate-800/80"
+        >
+          编辑别名
+        </button>
+      )}
+      {canEditAlias && !isLocked && <div className="my-1 h-px bg-slate-800/80" />}
       <button
         type="button"
         onClick={handleDelete}

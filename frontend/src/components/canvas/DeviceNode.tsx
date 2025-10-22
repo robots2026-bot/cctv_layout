@@ -3,12 +3,14 @@ import { CanvasElement } from '../../types/canvas';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { deriveSwitchLabel, getDeviceCategory, getStatusVisual } from '../../utils/deviceVisual';
 import { resolveBridgeRole } from '../../utils/bridgeRole';
+import { useRef } from 'react';
 
 interface DeviceNodeProps {
   element: CanvasElement;
 }
 
 export const DeviceNode = ({ element }: DeviceNodeProps) => {
+  const groupRef = useRef<import('konva/lib/Group').Group>(null);
   const {
     hoveredElementId,
     setHoveredElement,
@@ -98,6 +100,7 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
       y={position.y}
       draggable={mode === 'layout' && !linking.active && !isBlueprintEditing && !isLocked}
       listening={!isBlueprintEditing}
+      ref={groupRef}
       onDragMove={(event) => {
         if (isBlueprintEditing || isLocked) {
           return;
@@ -110,10 +113,23 @@ export const DeviceNode = ({ element }: DeviceNodeProps) => {
       onMouseEnter={() => {
         if (isBlueprintEditing) return;
         setHoveredElement(element.id);
+        const stage = groupRef.current?.getStage();
+        if (!stage) return;
+        if (mode === 'layout' && !isLocked) {
+          stage.container().style.cursor = 'grab';
+        } else if (mode === 'linking' && !isLocked) {
+          stage.container().style.cursor = 'pointer';
+        } else {
+          stage.container().style.cursor = 'default';
+        }
       }}
       onMouseLeave={() => {
         if (isBlueprintEditing) return;
         setHoveredElement(null);
+        const stage = groupRef.current?.getStage();
+        if (stage) {
+          stage.container().style.cursor = 'grab';
+        }
       }}
       onMouseDown={(event) => {
         if (isBlueprintEditing || isLocked) {

@@ -20,6 +20,8 @@ const LayoutWorkbench = () => {
     isDevicePanelCollapsed: state.isDevicePanelCollapsed,
     toggleDevicePanel: state.toggleDevicePanel
   }));
+  const mode = useCanvasStore((state) => state.mode);
+  const showDevicePanel = mode === 'layout';
 
   useEffect(() => {
     if (layoutId) {
@@ -39,7 +41,7 @@ const LayoutWorkbench = () => {
         <FloatingPropertyPanel />
         <BlueprintManager />
       </div>
-      {!isDevicePanelCollapsed && (
+      {showDevicePanel && !isDevicePanelCollapsed && (
         <div className="relative flex w-72 flex-col border-l border-slate-800 bg-slate-900/40">
           <button
             type="button"
@@ -54,7 +56,7 @@ const LayoutWorkbench = () => {
           </div>
         </div>
       )}
-      {isDevicePanelCollapsed && (
+      {showDevicePanel && isDevicePanelCollapsed && (
         <button
           type="button"
           onClick={toggleDevicePanel}

@@ -257,20 +257,20 @@ export const ConnectionLine = ({ connection }: ConnectionLineProps) => {
   };
 
   const handleMouseEnter = (event: KonvaEventObject<MouseEvent>) => {
+    const stage = event.target.getStage();
+    if (stage) {
+      stage.container().style.cursor = 'default';
+    }
     if (isBlueprintEditing || mode !== 'linking' || isLocked) {
       return;
     }
     setHoveredConnection(connection.id);
-    const stage = event.target.getStage();
-    if (stage) {
-      stage.container().style.cursor = 'pointer';
-    }
   };
 
   const handleMouseLeave = (event: KonvaEventObject<MouseEvent>) => {
     const stage = event.target.getStage();
     if (stage) {
-      stage.container().style.cursor = 'default';
+      stage.container().style.cursor = isLocked || mode === 'blueprint' ? 'default' : 'grab';
     }
     setHoveredConnection(null);
   };

@@ -10,6 +10,16 @@ interface Notification {
 
 type BlueprintMode = 'idle' | 'editing' | 'locked';
 
+interface AliasDialogConfig {
+  isOpen: boolean;
+  title: string;
+  confirmLabel: string;
+  placeholder?: string;
+  initialValue: string;
+  description?: string;
+  onConfirm?: (value: string) => Promise<void> | void;
+}
+
 interface UIState {
   notifications: Notification[];
   isProjectSidebarCollapsed: boolean;
@@ -22,6 +32,11 @@ interface UIState {
   enterBlueprintMode: () => void;
   confirmBlueprintMode: () => void;
   exitBlueprintMode: () => void;
+  aliasDialog: AliasDialogConfig;
+  aliasDialogSubmitting: boolean;
+  openAliasDialog: (config: Omit<AliasDialogConfig, 'isOpen'>) => void;
+  closeAliasDialog: () => void;
+  setAliasDialogSubmitting: (submitting: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -30,6 +45,13 @@ export const useUIStore = create<UIState>()(
     isProjectSidebarCollapsed: false,
     isDevicePanelCollapsed: false,
     blueprintMode: 'idle',
+    aliasDialog: {
+      isOpen: false,
+      title: '编辑别名',
+      confirmLabel: '保存',
+      initialValue: ''
+    },
+    aliasDialogSubmitting: false,
     addNotification: (notification) =>
       set((state) => ({ notifications: [notification, ...state.notifications].slice(0, 20) })),
     dismissNotification: (id) =>
@@ -52,6 +74,25 @@ export const useUIStore = create<UIState>()(
       set(() => ({
         blueprintMode: useCanvasStore.getState().blueprint ? 'locked' : 'idle'
       })),
-    exitBlueprintMode: () => set({ blueprintMode: 'idle' })
+    exitBlueprintMode: () => set({ blueprintMode: 'idle' }),
+    openAliasDialog: (config) =>
+      set({
+        aliasDialog: {
+          ...config,
+          isOpen: true
+        },
+        aliasDialogSubmitting: false
+      }),
+    closeAliasDialog: () =>
+      set({
+        aliasDialog: {
+          isOpen: false,
+          title: '编辑别名',
+          confirmLabel: '保存',
+          initialValue: ''
+        },
+        aliasDialogSubmitting: false
+      }),
+    setAliasDialogSubmitting: (submitting) => set({ aliasDialogSubmitting: submitting })
   }))
 );

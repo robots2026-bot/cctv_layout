@@ -1,6 +1,5 @@
-import { Dialog, Transition } from '@headlessui/react';
 import type { AxiosError } from 'axios';
-import { DragEvent, FormEvent, Fragment, MouseEvent, useEffect, useMemo, useState } from 'react';
+import { DragEvent, MouseEvent, useEffect, useMemo, useState } from 'react';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { useLayoutStore } from '../../stores/layoutStore';
 import { useRealtimeStore } from '../../stores/realtimeStore';
@@ -14,10 +13,6 @@ import {
   getStatusVisual
 } from '../../utils/deviceVisual';
 import { resolveBridgeRole } from '../../utils/bridgeRole';
-
-type ManualDeviceForm = {
-  name: string;
-};
 
 interface DevicePaletteProps {
   projectId: string;
@@ -94,24 +89,21 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
     updateDeviceName: state.updateDeviceName,
     deleteDevice: state.deleteDevice
   }));
-  const { elements, isDirty } = useCanvasStore((state) => ({
+  const { elements, isDirty, mode } = useCanvasStore((state) => ({
     elements: state.elements,
-    isDirty: state.isDirty
+    isDirty: state.isDirty,
+    mode: state.mode
   }));
   const { saveLayout, isSaving } = useLayoutStore((state) => ({
     saveLayout: state.saveLayout,
     isSaving: state.isSaving
   }));
-  const addNotification = useUIStore((state) => state.addNotification);
+  const { addNotification, openAliasDialog } = useUIStore((state) => ({
+    addNotification: state.addNotification,
+    openAliasDialog: state.openAliasDialog
+  }));
   const [isLoading, setIsLoading] = useState(false);
-  const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
-  const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; device: DeviceSummary } | null>(null);
-  const [manualForm, setManualForm] = useState<ManualDeviceForm>({
-    name: ''
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (projectId) {
@@ -162,107 +154,46 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
     };
   }, [availableDevices.length, elements]);
 
-  const resetManualState = () => {
-    setManualForm({ name: '' });
-    setEditingDeviceId(null);
-    setIsSubmitting(false);
-    setSubmitError(null);
-  };
-
-  const closeManualDialog = () => {
-    setIsManualDialogOpen(false);
-    resetManualState();
-  };
-
-  const handleManualSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleAddSwitch = () => {
     if (!projectId) return;
-    const wasEditing = Boolean(editingDeviceId);
     if (isSaving) {
-      setSubmitError('布局正在保存，请稍后再试。');
+      addNotification({
+        id: createNotificationId(),
+        title: '布局保存中',
+        message: '请等待布局保存完成后再手动添加交换机。',
+        level: 'warning'
+      });
       return;
     }
 
-    const trimmedName = manualForm.name.trim();
-
-    setIsSubmitting(true);
-    setSubmitError(null);
-
-    if (editingDeviceId && isDirty) {
-      const confirmed = window.confirm(
-        '当前画布存在未保存的更改，本次更新将先保存布局再执行。是否继续？'
-      );
-      if (!confirmed) {
-        setIsSubmitting(false);
-        return;
-      }
-      try {
-        await saveLayout();
-      } catch (error) {
-        console.error('更新设备前保存布局失败', error);
-        setIsSubmitting(false);
-        setSubmitError('保存布局失败，设备未更新。');
-        addNotification({
-          id: createNotificationId(),
-          title: '更新设备已取消',
-          message: '保存布局失败，设备未更新。',
-          level: 'error'
-        });
-        return;
-      }
-    }
-
-    if (editingDeviceId) {
-      try {
-        await updateDeviceName(projectId, editingDeviceId, { name: trimmedName });
-      } catch (error) {
-        const message = resolveUpdateErrorMessage(error);
-        setSubmitError(message);
-        addNotification({
-          id: createNotificationId(),
-          title: '更新设备失败',
-          message,
-          level: 'error'
-        });
-        setIsSubmitting(false);
-        return;
-      }
-    } else {
-      if (!trimmedName) {
-        setSubmitError('请填写交换机名称');
-        setIsSubmitting(false);
-        return;
-      }
-      try {
-        await registerSwitch(projectId, { name: trimmedName });
-      } catch (error) {
-        const axiosError = error as AxiosError<{ message?: string | string[] }>;
-        if (axiosError?.response?.status === 409) {
-          setSubmitError('同一项目内交换机名称已存在，请调整后重试。');
-        } else {
-          setSubmitError('交换机创建失败，请稍后重试');
+    openAliasDialog({
+      title: '手动添加交换机',
+      confirmLabel: '创建交换机',
+      placeholder: '例如：施工区交换机01',
+      initialValue: '',
+      description: '填写交换机名称后，该设备会出现在未布局设备列表中。',
+      onConfirm: async (name) => {
+        const trimmed = name.trim();
+        if (!trimmed) {
+          throw new Error('请填写交换机名称');
         }
-        setIsSubmitting(false);
-        return;
+        try {
+          await registerSwitch(projectId, { name: trimmed });
+          addNotification({
+            id: createNotificationId(),
+            title: '交换机已创建',
+            message: '新交换机已加入未布局设备列表。',
+            level: 'info'
+          });
+        } catch (error) {
+          const axiosError = error as AxiosError<{ message?: string | string[] }>;
+          if (axiosError?.response?.status === 409) {
+            throw new Error('同一项目内交换机名称已存在，请调整后重试。');
+          }
+          throw new Error('交换机创建失败，请稍后重试');
+        }
       }
-      addNotification({
-        id: createNotificationId(),
-        title: '交换机已创建',
-        message: '新交换机已加入未布局设备列表。',
-        level: 'info'
-      });
-    }
-
-    setIsSubmitting(false);
-    closeManualDialog();
-    if (wasEditing) {
-      addNotification({
-        id: createNotificationId(),
-        title: '别名已更新',
-        message: trimmedName ? '已保存新的设备别名。' : '已清空别名，恢复为网关名称。',
-        level: 'info'
-      });
-    }
+    });
   };
 
   useEffect(() => {
@@ -342,20 +273,46 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
   };
 
   const handleEditDevice = () => {
-    if (!contextMenu) return;
+    if (!contextMenu || !projectId) return;
     const category = getDeviceCategory(contextMenu.device.type);
     if (category === 'switch') {
       return;
     }
     const device = contextMenu.device;
-    setManualForm({
-      name: device.alias ?? ''
+    openAliasDialog({
+      title: '编辑设备别名',
+      confirmLabel: '保存',
+      initialValue: device.alias ?? device.name ?? '',
+      onConfirm: async (nextName) => {
+        if (isDirty) {
+          const confirmed = window.confirm(
+            '当前画布存在未保存的更改，本次更新将先保存布局再执行。是否继续？'
+          );
+          if (!confirmed) {
+            return;
+          }
+          try {
+            await saveLayout();
+          } catch (error) {
+            console.error('保存布局失败', error);
+            throw new Error('保存布局失败，设备别名未更新。');
+          }
+        }
+        try {
+          await updateDeviceName(projectId, device.id, { name: nextName });
+          addNotification({
+            id: createNotificationId(),
+            title: '别名已更新',
+            message: `设备已更新为 “${nextName}”。`,
+            level: 'info'
+          });
+        } catch (error) {
+          console.error('更新设备失败', error);
+          throw new Error(resolveUpdateErrorMessage(error));
+        }
+      }
     });
-    setEditingDeviceId(device.id);
-    setSubmitError(null);
-    setIsSubmitting(false);
-    setIsManualDialogOpen(true);
-    closeContextMenu();
+    setContextMenu(null);
   };
 
   const contextMenuPosition = contextMenu
@@ -369,6 +326,10 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
       })()
     : null;
 
+  if (mode !== 'layout') {
+    return null;
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-slate-800/80 px-3 py-3">
@@ -379,10 +340,7 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
           </div>
           <button
             type="button"
-            onClick={() => {
-              resetManualState();
-              setIsManualDialogOpen(true);
-            }}
+            onClick={handleAddSwitch}
             disabled={!projectId}
             className="inline-flex items-center gap-1 rounded border border-brand-500/40 bg-brand-500/10 px-2 py-1 text-xs font-medium text-brand-200 transition hover:border-brand-400/70 hover:bg-brand-500/20 hover:text-brand-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -480,30 +438,9 @@ export const DevicePalette = ({ projectId }: DevicePaletteProps) => {
           </div>
         </>
       )}
-      <ManualDeviceDialog
-        open={isManualDialogOpen}
-        onClose={closeManualDialog}
-        form={manualForm}
-        onChange={setManualForm}
-        onSubmit={handleManualSubmit}
-        isSubmitting={isSubmitting}
-        errorMessage={submitError}
-        mode={editingDeviceId ? 'edit' : 'create'}
-      />
     </div>
   );
 };
-
-interface ManualDeviceDialogProps {
-  open: boolean;
-  onClose: () => void;
-  form: ManualDeviceForm;
-  onChange: (next: ManualDeviceForm) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  isSubmitting: boolean;
-  errorMessage: string | null;
-  mode: 'create' | 'edit';
-}
 
 const DevicePaletteItem = ({
   device,
@@ -595,100 +532,3 @@ const DevicePaletteItem = ({
     </div>
   );
 };
-
-const ManualDeviceDialog = ({
-  open,
-  onClose,
-  form,
-  onChange,
-  onSubmit,
-  isSubmitting,
-  errorMessage,
-  mode
-}: ManualDeviceDialogProps) => (
-  <Transition show={open} as={Fragment}>
-    <Dialog onClose={onClose} className="relative z-50">
-      <Transition.Child
-        as={Fragment}
-        enter="transition-opacity ease-linear duration-200"
-        enterFrom="opacity-0"
-        enterTo="opacity-100"
-        leave="transition-opacity ease-linear duration-150"
-        leaveFrom="opacity-100"
-        leaveTo="opacity-0"
-      >
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm" />
-      </Transition.Child>
-
-      <div className="fixed inset-0 flex justify-end">
-        <Transition.Child
-          as={Fragment}
-          enter="transform transition ease-in-out duration-300"
-          enterFrom="translate-x-full"
-          enterTo="translate-x-0"
-          leave="transform transition ease-in-out duration-200"
-          leaveFrom="translate-x-0"
-          leaveTo="translate-x-full"
-        >
-          <Dialog.Panel className="flex h-full w-full max-w-md flex-col border-l border-slate-800 bg-slate-950/95 p-6 shadow-2xl">
-            <Dialog.Title className="text-lg font-semibold text-white">
-              {mode === 'edit' ? '编辑设备别名' : '手动添加交换机'}
-            </Dialog.Title>
-            <Dialog.Description className="mt-1 text-xs text-slate-400">
-              {mode === 'edit'
-                ? '调整未布局设备在列表中的显示别名；别名留空时使用网关同步的原始名称。'
-                : '仅支持新增交换机，填写名称后即可出现在未布局列表中。'}
-            </Dialog.Description>
-
-            <form
-              className="mt-6 flex flex-1 flex-col gap-4 overflow-y-auto pr-1 text-sm text-slate-200"
-              onSubmit={onSubmit}
-            >
-              <label className="flex flex-col gap-2">
-                <span className="text-xs font-medium text-slate-300">
-                  {mode === 'edit' ? '设备别名' : '交换机名称'} {mode === 'create' && <span className="text-rose-300">*</span>}
-                </span>
-                <input
-                  value={form.name}
-                  onChange={(event) => onChange({ ...form, name: event.target.value })}
-                  maxLength={120}
-                  placeholder={
-                    mode === 'edit'
-                      ? '例如：西侧围栏摄像机1（留空则显示网关名称）'
-                      : '例如：施工区交换机01'
-                  }
-                  className="w-full rounded border border-slate-800/80 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-brand-400/80 focus:outline-none"
-                  required={mode === 'create'}
-                />
-              </label>
-
-
-              {errorMessage && (
-                <div className="rounded border border-rose-500/60 bg-rose-950/40 px-3 py-2 text-xs text-rose-200">
-                  {errorMessage}
-                </div>
-              )}
-
-              <div className="mt-auto flex justify-end gap-2 pt-4">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded border border-slate-700/80 bg-slate-900/70 px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-slate-500 hover:text-white"
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="inline-flex items-center justify-center rounded border border-brand-500/70 bg-brand-500/20 px-3 py-2 text-xs font-semibold text-brand-100 transition hover:border-brand-400/80 hover:bg-brand-500/30 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isSubmitting ? '保存中...' : mode === 'edit' ? '保存别名' : '创建交换机'}
-                </button>
-              </div>
-            </form>
-          </Dialog.Panel>
-        </Transition.Child>
-      </div>
-    </Dialog>
-  </Transition>
-);

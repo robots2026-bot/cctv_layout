@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useRealtimeStore } from '../../stores/realtimeStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useUIStore } from '../../stores/uiStore';
+import AliasDialog from '../common/AliasDialog';
 
 const ShellLayout = ({ children }: PropsWithChildren) => {
   const connectionState = useRealtimeStore((state) => state.connectionState);
@@ -160,6 +161,7 @@ const ShellLayout = ({ children }: PropsWithChildren) => {
         )}
         <div className="relative flex-1 overflow-hidden">{children}</div>
       </main>
+      <AliasDialog />
     </div>
   );
 };

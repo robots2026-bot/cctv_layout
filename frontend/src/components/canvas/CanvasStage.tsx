@@ -267,6 +267,7 @@ export const CanvasStage = () => {
             return;
           }
           useCanvasStore.getState().setHoveredElement(null);
+          useCanvasStore.getState().setHoveredConnection(null);
           stageNode.container().style.cursor = 'grabbing';
         }}
         onDragMove={(event: KonvaEventObject<DragEvent>) => {
