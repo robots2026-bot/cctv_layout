@@ -25,6 +25,7 @@ interface UIState {
   isProjectSidebarCollapsed: boolean;
   isDevicePanelCollapsed: boolean;
   blueprintMode: BlueprintMode;
+  treeViewMode: boolean;
   addNotification: (notification: Notification) => void;
   dismissNotification: (id: string) => void;
   toggleProjectSidebar: () => void;
@@ -37,6 +38,8 @@ interface UIState {
   openAliasDialog: (config: Omit<AliasDialogConfig, 'isOpen'>) => void;
   closeAliasDialog: () => void;
   setAliasDialogSubmitting: (submitting: boolean) => void;
+  setTreeViewMode: (enabled: boolean) => void;
+  toggleTreeViewMode: () => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -45,6 +48,7 @@ export const useUIStore = create<UIState>()(
     isProjectSidebarCollapsed: false,
     isDevicePanelCollapsed: false,
     blueprintMode: 'idle',
+    treeViewMode: false,
     aliasDialog: {
       isOpen: false,
       title: '编辑别名',
@@ -75,6 +79,8 @@ export const useUIStore = create<UIState>()(
         blueprintMode: useCanvasStore.getState().blueprint ? 'locked' : 'idle'
       })),
     exitBlueprintMode: () => set({ blueprintMode: 'idle' }),
+    setTreeViewMode: (enabled) => set({ treeViewMode: enabled }),
+    toggleTreeViewMode: () => set((state) => ({ treeViewMode: !state.treeViewMode })),
     openAliasDialog: (config) =>
       set({
         aliasDialog: {

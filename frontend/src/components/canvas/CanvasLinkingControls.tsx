@@ -3,13 +3,15 @@ import {
   CloudArrowUpIcon,
   LockClosedIcon,
   LockOpenIcon,
-  MagnifyingGlassPlusIcon
+  MagnifyingGlassPlusIcon,
+  QueueListIcon
 } from '@heroicons/react/24/solid';
 import { useCanvasStore } from '../../stores/canvasStore';
 import type { CanvasMode } from '../../stores/canvasStore';
 import { BlueprintControlsBar } from '../blueprint/BlueprintControlsBar';
 import { useLayoutStore } from '../../stores/layoutStore';
 import { useUIStore } from '../../stores/uiStore';
+import { buildTreeLayout } from '../../utils/treeLayout';
 
 export const CanvasLinkingControls = () => {
   const {
@@ -47,7 +49,11 @@ export const CanvasLinkingControls = () => {
     saveLayout: state.saveLayout,
     isSaving: state.isSaving
   }));
-  const addNotification = useUIStore((state) => state.addNotification);
+  const { addNotification, treeViewMode, setTreeViewMode } = useUIStore((state) => ({
+    addNotification: state.addNotification,
+    treeViewMode: state.treeViewMode,
+    setTreeViewMode: state.setTreeViewMode
+  }));
   const formattedScale = viewportScale.toFixed(viewportScale >= 1 ? 1 : 2);
 
   const handleModeChange = (nextMode: CanvasMode) => {
@@ -59,6 +65,9 @@ export const CanvasLinkingControls = () => {
     }
     if (mode === 'view' && nextMode !== 'view') {
       setLocked(true);
+    }
+    if (nextMode !== 'view' && treeViewMode) {
+      setTreeViewMode(false);
     }
     if (nextMode === 'view' && mode !== 'view' && isDirty) {
       addNotification({
@@ -90,6 +99,51 @@ export const CanvasLinkingControls = () => {
       return;
     }
     focusAllElements();
+  };
+
+  const handleToggleTreeView = () => {
+    if (mode !== 'view') {
+      return;
+    }
+    if (!treeViewMode) {
+      const store = useCanvasStore.getState();
+      const layout = buildTreeLayout(store.elements, store.connections);
+      const width = store.viewport.width ?? 0;
+      const height = store.viewport.height ?? 0;
+      if (layout.nodes.length === 0) {
+        addNotification({
+          id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+          title: '无法生成树形图',
+          message: '当前布局未包含 OFC 交换机。',
+          level: 'warning'
+        });
+        return;
+      }
+      setTreeViewMode(true);
+      if (width > 0 && height > 0) {
+        const xs = layout.nodes.map((node) => node.position.x);
+        const ys = layout.nodes.map((node) => node.position.y);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        const center = {
+          x: (minX + maxX) / 2,
+          y: (minY + maxY) / 2
+        };
+        setViewport({
+          scale: 1,
+          position: {
+            x: width / 2 - center.x,
+            y: height / 2 - center.y
+          }
+        });
+      } else {
+        setViewport({ scale: 1, position: { x: 0, y: 0 } });
+      }
+    } else {
+      setTreeViewMode(false);
+    }
   };
 
   const hasContent = elements.length > 0 || Boolean(blueprint);
@@ -151,6 +205,19 @@ export const CanvasLinkingControls = () => {
           >
             <ArrowsPointingOutIcon className="h-4 w-4" />
             <span>显示全部</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleToggleTreeView}
+            disabled={mode !== 'view' || !hasContent}
+            className={`flex items-center gap-1 rounded-md border px-3 py-1 text-[11px] transition focus:outline-none focus:ring-2 focus:ring-sky-400/60 focus:ring-offset-2 focus:ring-offset-slate-900 ${
+              treeViewMode
+                ? 'border-sky-400 bg-sky-500/20 text-sky-100 hover:bg-sky-500/30'
+                : 'border-slate-700/80 bg-slate-800/70 text-slate-200 hover:bg-slate-700/70'
+            } disabled:cursor-not-allowed disabled:border-slate-700/60 disabled:bg-transparent disabled:text-slate-500`}
+          >
+            <QueueListIcon className="h-4 w-4" />
+            <span>树形图</span>
           </button>
         </div>
         {isSaveVisible && (

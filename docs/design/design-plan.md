@@ -41,6 +41,7 @@
   - 画布组件：`CanvasStage`、`DeviceNode`、`ConnectionLine`、`GridBackground`，严格区分展示型与容器型组件；蓝图相关能力拆分为 `BlueprintLayer` 与 `BlueprintControls`，由 `canvasStore.mode` 中的 `blueprint` 态控制交互，保持背景缩放/位置逻辑独立并防止误操作。
   - 侧栏组件：`DevicePalette`（可拖拽列表，使用图形化图标与绿色/深灰背景区分设备在线状态；网桥节点追加 AP/ST 徽章，快速识别上下行角色）、`PropertyPanel`、`VersionHistory`。
   - 交换机仅展示名称，不支持别名；上下文菜单仅保留“隐藏”，避免与其它设备共享的别名编辑入口。
+  - 观看模式新增“树形图”只读视图：沿用当前布局设备/连线数据，按钮位于「显示全部」旁；仅当存在名称/型号包含 `OFC` 的交换机时可进入，树图以 `OFC` 交换机为根、采用左→右的横向布局（根在最左，节点逐级向右扩展），并关闭未布局面板与属性面板，节点不可拖拽，仅支持画布拖动/缩放与节点 hover 状态提示，持续订阅实时状态。
   - 网桥连线约束：同一项目的网桥节点按角色渲染不同的连接类型。`AP ⇄ ST` 使用带方向的双虚线表示桥接链路；`AP`/`ST` 与其他设备之间使用实线；`AP ⇄ AP`、`ST ⇄ ST` 不允许绘制双虚线以防止错误拓扑。
   - 调试组件：`GatewayMockForm` 负责收集基础字段，`MockDeviceTable` 支撑设备行编辑与批量导入，`PayloadPreview` 展示实时 JSON 与校验告警，`MockSendResult` 输出后端响应与错误提示。
 - **性能策略**：

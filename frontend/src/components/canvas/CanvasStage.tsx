@@ -18,6 +18,7 @@ import { nanoid } from '../../utils/nanoid';
 import { uploadBlueprintFile } from '../../services/fileUploads';
 import { useLayoutStore } from '../../stores/layoutStore';
 import { shallow } from 'zustand/shallow';
+import { TreeViewLayer } from './TreeViewLayer';
 
 const formatBytes = (bytes: number) => {
   if (bytes >= 1024 * 1024) {
@@ -43,7 +44,10 @@ export const CanvasStage = () => {
     }),
     shallow
   );
-  const addNotification = useUIStore((state) => state.addNotification);
+  const { addNotification, treeViewMode } = useUIStore((state) => ({
+    addNotification: state.addNotification,
+    treeViewMode: state.treeViewMode
+  }));
   const [image] = useImage(background?.url ?? '', 'anonymous');
   const [dimensions, setDimensions] = useState({ width: viewport.width, height: viewport.height });
 
@@ -212,6 +216,9 @@ export const CanvasStage = () => {
       if (!device || !device.id) {
         return;
       }
+      if (useUIStore.getState().treeViewMode) {
+        return;
+      }
 
       stage.setPointersPositions(event);
       const pointer = stage.getRelativePointerPosition();
@@ -349,25 +356,33 @@ export const CanvasStage = () => {
           setViewport({ scale: nextScale, position: newPosition });
         }}
       >
-        {image && (
+        {image && !treeViewMode && (
           <Layer listening={false}>
             <KonvaImage image={image} width={image.width} height={image.height} />
           </Layer>
         )}
-        <BlueprintLayer />
-        <Layer listening={mode !== 'blueprint'}>
-          {connections.map((connection) => (
-            <ConnectionLine key={connection.id} connection={connection} />
-          ))}
-        </Layer>
-        <Layer listening={false}>
-          <LinkingPreview />
-        </Layer>
-        <Layer listening={mode !== 'blueprint'}>
-          {elements.map((element) => (
-            <DeviceNode key={element.id} element={element} />
-          ))}
-        </Layer>
+        {!treeViewMode && <BlueprintLayer />}
+        {treeViewMode ? (
+          <Layer listening>
+            <TreeViewLayer />
+          </Layer>
+        ) : (
+          <>
+            <Layer listening={mode !== 'blueprint'}>
+              {connections.map((connection) => (
+                <ConnectionLine key={connection.id} connection={connection} />
+              ))}
+            </Layer>
+            <Layer listening={false}>
+              <LinkingPreview />
+            </Layer>
+            <Layer listening={mode !== 'blueprint'}>
+              {elements.map((element) => (
+                <DeviceNode key={element.id} element={element} />
+              ))}
+            </Layer>
+          </>
+        )}
       </Stage>
       <CanvasLinkingControls />
       <CanvasContextMenu />

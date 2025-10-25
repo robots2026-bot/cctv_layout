@@ -16,12 +16,13 @@ const LayoutWorkbench = () => {
     isLoading: state.isLoading
   }));
   const resetCanvas = useCanvasStore((state) => state.resetCanvas);
-  const { isDevicePanelCollapsed, toggleDevicePanel } = useUIStore((state) => ({
+  const { isDevicePanelCollapsed, toggleDevicePanel, treeViewMode } = useUIStore((state) => ({
     isDevicePanelCollapsed: state.isDevicePanelCollapsed,
-    toggleDevicePanel: state.toggleDevicePanel
+    toggleDevicePanel: state.toggleDevicePanel,
+    treeViewMode: state.treeViewMode
   }));
   const mode = useCanvasStore((state) => state.mode);
-  const showDevicePanel = mode === 'layout';
+  const showDevicePanel = mode === 'layout' && !treeViewMode;
 
   useEffect(() => {
     if (layoutId) {
@@ -38,8 +39,8 @@ const LayoutWorkbench = () => {
         ) : (
           <CanvasStage />
         )}
-        <FloatingPropertyPanel />
-        <BlueprintManager />
+        {!treeViewMode && <FloatingPropertyPanel />}
+        {!treeViewMode && <BlueprintManager />}
       </div>
       {showDevicePanel && !isDevicePanelCollapsed && (
         <div className="relative flex w-72 flex-col border-l border-slate-800 bg-slate-900/40">
