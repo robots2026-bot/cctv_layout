@@ -136,40 +136,62 @@ export const buildTreeLayout = (
     });
   }
 
-  const nodesByDepth = new Map<number, TreeNodeInternal[]>();
+  const childrenMap = new Map<string, TreeNodeInternal[]>();
   resultNodes.forEach((node) => {
-    const collection = nodesByDepth.get(node.depth) ?? [];
-    collection.push(node);
-    nodesByDepth.set(node.depth, collection);
+    if (node.parentId) {
+      const list = childrenMap.get(node.parentId) ?? [];
+      list.push(node);
+      childrenMap.set(node.parentId, list);
+    }
   });
 
+  const layoutRoots = resultNodes.filter((node) => !node.parentId);
+  const positionedMap = new Map<string, TreeLayoutNode>();
   const horizontalSpacing = 220;
   const verticalSpacing = 150;
-  const positionedNodes: TreeLayoutNode[] = [];
+  let leafIndex = 0;
 
-  Array.from(nodesByDepth.entries())
-    .sort(([a], [b]) => a - b)
-    .forEach(([depth, nodes]) => {
-      const columnHeight = (nodes.length - 1) * verticalSpacing;
-      const startY = -columnHeight / 2;
-      nodes.forEach((node, index) => {
-        positionedNodes.push({
-          element: node.element,
-          depth,
-          parentId: node.parentId,
-          position: {
-            x: depth * horizontalSpacing,
-            y: startY + index * verticalSpacing
-          }
-        });
-      });
+  const assignPosition = (node: TreeNodeInternal, depth: number): number => {
+    const children = childrenMap.get(node.element.id) ?? [];
+    let y: number;
+    if (children.length === 0) {
+      y = leafIndex * verticalSpacing;
+      leafIndex += 1;
+    } else {
+      const childYs = children.map((child) => assignPosition(child, depth + 1));
+      y = childYs.reduce((sum, value) => sum + value, 0) / childYs.length;
+    }
+    positionedMap.set(node.element.id, {
+      element: node.element,
+      depth,
+      parentId: node.parentId,
+      position: {
+        x: depth * horizontalSpacing,
+        y
+      }
     });
+    return y;
+  };
 
-  const positionMap = new Map<string, { x: number; y: number }>();
-  positionedNodes.forEach((node) => positionMap.set(node.element.id, node.position));
+  layoutRoots.forEach((root, index) => {
+    if (index > 0) {
+      leafIndex += 1;
+    }
+    assignPosition(root, 0);
+  });
+
+  const positionedNodes = Array.from(positionedMap.values());
+  const minY = Math.min(...positionedNodes.map((node) => node.position.y));
+  const normalizedNodes = positionedNodes.map((node) => ({
+    ...node,
+    position: {
+      x: node.position.x,
+      y: node.position.y - minY
+    }
+  }));
 
   const edges: TreeLayoutEdge[] = [];
-  positionedNodes.forEach((node) => {
+  normalizedNodes.forEach((node) => {
     if (!node.parentId) {
       return;
     }
@@ -184,7 +206,7 @@ export const buildTreeLayout = (
   });
 
   return {
-    nodes: positionedNodes,
+    nodes: normalizedNodes,
     edges
   };
 };
