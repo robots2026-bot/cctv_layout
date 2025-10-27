@@ -62,6 +62,17 @@ const DeviceListIcon = ({
       </svg>
     );
   }
+  if (category === 'nvr') {
+    return (
+      <svg viewBox="0 0 40 40" className="h-8 w-8" aria-hidden="true">
+        <rect x="10" y="11" width="20" height="14" rx="3" fill="#0f172a" stroke={accent} strokeWidth="2" />
+        <rect x="13" y="15" width="10" height="2.5" rx="1" fill={accent} />
+        <rect x="13" y="19" width="14" height="2.5" rx="1" fill={accent} />
+        <rect x="27" y="15" width="6" height="6" rx="2" stroke={accent} strokeWidth="1.5" fill="none" />
+        <circle cx="30" cy="18" r="1.5" fill={accent} />
+      </svg>
+    );
+  }
 
   return (
     <svg viewBox="0 0 32 32" className="h-8 w-8" aria-hidden="true" style={{ color: accent }}>

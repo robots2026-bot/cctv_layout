@@ -29,6 +29,18 @@ export const DeviceNodeVisual = ({
     const accent = isHovered ? '#f8fafc' : '#e2e8f0';
     const baseFill = '#111827';
 
+    if (category === 'nvr') {
+      return (
+        <Group>
+          <Rect x={6} y={6} width={30} height={20} cornerRadius={4} fill={baseFill} stroke={accent} strokeWidth={2} />
+          <Rect x={9} y={10} width={12} height={3} fill={accent} cornerRadius={1} />
+          <Rect x={9} y={16} width={18} height={3} fill={accent} cornerRadius={1} />
+          <Rect x={24} y={12} width={8} height={8} cornerRadius={2} stroke={accent} strokeWidth={1.5} />
+          <Circle x={28} y={16} radius={1.5} fill={accent} />
+        </Group>
+      );
+    }
+
     if (category === 'bridge') {
       const badgeLabel = bridgeRole === 'AP' ? 'AP' : bridgeRole === 'ST' ? 'ST' : null;
       const badgeFill =

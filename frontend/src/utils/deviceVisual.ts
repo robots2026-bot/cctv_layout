@@ -1,4 +1,4 @@
-export type DeviceCategory = 'camera' | 'bridge' | 'switch' | 'other';
+export type DeviceCategory = 'camera' | 'nvr' | 'bridge' | 'switch' | 'other';
 export interface DeviceTypeVisual {
   label: string;
   accent: string;
@@ -10,6 +10,9 @@ export const getDeviceCategory = (type?: string): DeviceCategory => {
   const normalized = (type ?? '').toLowerCase();
   if (!normalized) {
     return 'other';
+  }
+  if (normalized.includes('nvr') || normalized.includes('recorder') || normalized.includes('录像机')) {
+    return 'nvr';
   }
   if (normalized.includes('switch') || normalized.includes('v600') || normalized.includes('交换机')) {
     return 'switch';

@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo } from 'react';
 import { Group, Label, Tag, Text } from 'react-konva';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { buildTreeLayout } from '../../utils/treeLayout';
@@ -21,7 +21,6 @@ export const TreeViewLayer = () => {
     () => new Map(layout.nodes.map((node) => [node.element.id, node])),
     [layout.nodes]
   );
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   if (layout.nodes.length === 0) {
     return (
@@ -42,19 +41,20 @@ export const TreeViewLayer = () => {
   }
 
   const handleEnter = (event: KonvaEventObject<MouseEvent>, nodeId: string) => {
-    setHoveredId(nodeId);
     const stage = event.target.getStage();
     if (stage) {
       stage.container().style.cursor = 'grab';
     }
+    const store = useCanvasStore.getState();
+    store.setHoveredElement(nodeId);
   };
 
   const handleLeave = (event: KonvaEventObject<MouseEvent>) => {
-    setHoveredId(null);
     const stage = event.target.getStage();
     if (stage) {
       stage.container().style.cursor = 'grab';
     }
+    useCanvasStore.getState().setHoveredElement(null);
   };
 
   return (
@@ -85,8 +85,6 @@ export const TreeViewLayer = () => {
         );
       })}
       {layout.nodes.map((node) => {
-        const statusVisual = getStatusVisual(node.element.metadata?.status as string | undefined);
-        const isHovered = hoveredId === node.element.id;
         return (
           <Group
             key={node.element.id}
@@ -95,20 +93,7 @@ export const TreeViewLayer = () => {
             onMouseEnter={(event) => handleEnter(event, node.element.id)}
             onMouseLeave={handleLeave}
           >
-            <DeviceNodeVisual element={node.element} isHovered={isHovered} />
-            {isHovered && (
-              <Label x={-100} y={node.element.size?.height ?? 70} listening={false}>
-                <Tag fill={statusVisual.panelBg} stroke={statusVisual.fill} opacity={0.95} cornerRadius={6} />
-                <Text
-                  text={`${node.element.name ?? '未命名设备'}\n状态：${statusVisual.label}`}
-                  fontSize={12}
-                  padding={8}
-                  fill={statusVisual.textColor}
-                  lineHeight={1.4}
-                  width={200}
-                />
-              </Label>
-            )}
+            <DeviceNodeVisual element={node.element} />
           </Group>
         );
       })}
