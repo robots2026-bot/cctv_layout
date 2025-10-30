@@ -6,7 +6,6 @@ import { DeviceNodeVisual } from './DeviceNodeVisual';
 import { KonvaEventObject } from 'konva/lib/Node';
 import { shallow } from 'zustand/shallow';
 import { TreeConnectionLine } from './TreeConnectionLine';
-import { getStatusVisual } from '../../utils/deviceVisual';
 
 export const TreeViewLayer = () => {
   const { elements, connections } = useCanvasStore(

@@ -11,7 +11,8 @@
 3. 与现有 NestJS `FilesModule` 整合，提供上传、删除、授权访问、生命周期管理能力。
 4. 在 Docker Compose 与生产环境均可使用（开发阶段采用 MinIO，本地持久化到 `./storage`，生产接入 S3 兼容对象存储）。
 5. 满足安全要求：HTTPS、Token 鉴权、对象访问控制、敏感信息脱敏或加密存储。
-6. 便于扩展的后处理流水线（缩略图生成、图像优化、格式转换），并暴露 Prometheus 指标。
+6. 对外访问统一通过业务域名的子路径（例如 `/storage/`），隐藏对象存储真实地址，便于后续接入 CDN。
+7. 便于扩展的后处理流水线（缩略图生成、图像优化、格式转换），并暴露 Prometheus 指标。
 
 ## 3. 方案概览
 ```
@@ -75,10 +76,11 @@ Frontend  ──(1) 请求上传凭证──►  FilesService (NestJS)
 ## 5. 前端配合方案
 1. 布局工作台导入蓝图时，先调用预签名接口获得 `uploadUrl` 与 `objectKey`。
 2. 使用浏览器原生 `fetch`/`XMLHttpRequest` 或 `AWS SDK` 上传文件，带上 `Content-Type`。
-3. 上传成功后调用 `complete` 接口，获取 `publicUrl` 与尺寸信息。
-4. 内部 `canvasStore` 存储 `{ url: publicUrl, naturalWidth, naturalHeight, ... }`；保存布局版本时不再包含 Data URL。
+3. 上传成功后调用 `complete` 接口，获取对象键与尺寸信息。
+4. 内部 `canvasStore` 存储 `{ objectKey, url, naturalWidth, naturalHeight, ... }`；`url` 来自后端返回的 `/storage/...` 地址，布局版本中仅保留对象键及必要的显示信息，避免硬编码域名。
 5. 导入失败或中途取消时，调用 `DELETE` 接口清理草稿对象。
 6. 仅在预签名阶段执行客户端压缩（仍建议提供压缩提示，但允许用户选择“保持原图”）。一旦文件服务上线，压缩逻辑可配置为跳过。
+7. 文件展示时直接使用后端返回的 `url`。生产环境该地址形如 `https://app.example.com/storage/cctv-layout-assets/...`，由 Nginx/CDN 代理至 MinIO/S3，无需额外拼接。
 
 ## 6. 安全与权限
 - 所有 Files API 需校验用户具备项目上传权限（owner/maintainer）。
@@ -96,8 +98,17 @@ Frontend  ──(1) 请求上传凭证──►  FilesService (NestJS)
   - `OBJECT_STORAGE_ACCESS_KEY`
   - `OBJECT_STORAGE_SECRET_KEY`
   - `OBJECT_STORAGE_BUCKET`
-  - `OBJECT_STORAGE_PUBLIC_BASE_URL`
-- Docker Compose 增加 `minio` 服务与 `mc` 初始化脚本，默认创建 bucket。
+  - `OBJECT_STORAGE_PUBLIC_BASE_URL`（生产设置为 `https://<primary-domain>/storage/<bucket>`）
+  - `OBJECT_STORAGE_PUBLIC_UPLOAD_ENDPOINT`
+- Docker Compose 增加 `minio` 服务与 `mc` 初始化脚本，默认创建 bucket。Nginx/Traefik 需新增 `/storage/` 路由代理至对象存储：
+  ```nginx
+  location /storage/ {
+    proxy_pass http://minio:9000/;
+    proxy_set_header Host minio:9000;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    client_max_body_size 200m;
+  }
+  ```
 - Prometheus 指标：
   - `files_upload_total{category,status}`
   - `files_size_bytes_bucket`

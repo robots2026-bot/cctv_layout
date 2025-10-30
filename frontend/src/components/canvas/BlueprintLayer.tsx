@@ -1,15 +1,18 @@
-import { Layer, Text, Image as KonvaImage } from 'react-konva';
+import { Layer, Image as KonvaImage } from 'react-konva';
 import useImage from 'use-image';
 import { useEffect } from 'react';
 import { useCanvasStore } from '../../stores/canvasStore';
 
 export const BlueprintLayer = () => {
-  const { blueprint, updateBlueprint, mode, isLocked } = useCanvasStore((state) => ({
-    blueprint: state.blueprint,
-    updateBlueprint: state.updateBlueprint,
-    mode: state.mode,
-    isLocked: state.isLocked
-  }));
+  const { blueprint, updateBlueprint, mode, isLocked, setBlueprintStatus } = useCanvasStore(
+    (state) => ({
+      blueprint: state.blueprint,
+      updateBlueprint: state.updateBlueprint,
+      mode: state.mode,
+      isLocked: state.isLocked,
+      setBlueprintStatus: state.setBlueprintStatus
+    })
+  );
   const [image, status] = useImage(blueprint?.url ?? '', 'anonymous');
 
   useEffect(() => {
@@ -22,6 +25,22 @@ export const BlueprintLayer = () => {
     updateBlueprint({ naturalWidth: image.width, naturalHeight: image.height });
   }, [image, blueprint, updateBlueprint]);
 
+  useEffect(() => {
+    if (!blueprint) {
+      setBlueprintStatus('idle');
+      return;
+    }
+    if (status === 'loaded') {
+      setBlueprintStatus('loaded');
+      return;
+    }
+    if (status === 'failed') {
+      setBlueprintStatus('error');
+      return;
+    }
+    setBlueprintStatus('loading');
+  }, [blueprint, status, setBlueprintStatus]);
+
   if (!blueprint) {
     return null;
   }
@@ -32,7 +51,7 @@ export const BlueprintLayer = () => {
 
   return (
     <Layer listening={isEditing} hitStrokeWidth={0}>
-      {image ? (
+      {image && (
         <KonvaImage
           image={image}
           width={width}
@@ -52,15 +71,6 @@ export const BlueprintLayer = () => {
             if (!isEditing) return;
             updateBlueprint({ offset: { x: event.target.x(), y: event.target.y() } });
           }}
-        />
-      ) : (
-        <Text
-          x={24}
-          y={24}
-          fontSize={16}
-          fill="#cbd5f5"
-          text={status === 'loading' ? '蓝图加载中…' : '蓝图加载失败'}
-          listening={false}
         />
       )}
     </Layer>

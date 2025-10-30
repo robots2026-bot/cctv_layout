@@ -42,9 +42,6 @@ export class ProjectFileEntity {
   @Column({ name: 'object_key', type: 'text' })
   objectKey!: string;
 
-  @Column({ name: 'public_url', type: 'text', nullable: true })
-  publicUrl?: string | null;
-
   @Column({ type: 'text' })
   filename!: string;
 

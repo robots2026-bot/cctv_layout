@@ -21,11 +21,7 @@ const ARROW_LENGTH = 16;
 const TRACK_OFFSET = 5;
 const ARROW_POSITIONS = [0.35, 0.7];
 
-const calculateConnectionSegments = (
-  fromPoint: Point,
-  toPoint: Point,
-  kind: CanvasConnection['kind']
-) => {
+const calculateConnectionSegments = (fromPoint: Point, toPoint: Point) => {
   const dx = toPoint.x - fromPoint.x;
   const dy = toPoint.y - fromPoint.y;
   const baseLength = Math.hypot(dx, dy);
@@ -98,7 +94,6 @@ export const TreeConnectionLine = ({
   toPosition
 }: TreeConnectionLineProps) => {
   const status = getStatusVisual(connection?.status ?? 'online');
-  const kind = connection?.kind ?? 'wired';
   const fromCategory = getDeviceCategory(fromElement.type);
   const toCategory = getDeviceCategory(toElement.type);
   const fromRole =
@@ -116,7 +111,7 @@ export const TreeConnectionLine = ({
   let orientedToCategory = toCategory;
   let orientedFromRole = fromRole;
   let orientedToRole = toRole;
-  let isWireless = kind === 'wireless';
+  let isWireless = (connection?.kind ?? 'wired') === 'wireless';
 
   const isBridgePair = fromCategory === 'bridge' && toCategory === 'bridge';
   const rolesComplementary =
@@ -154,7 +149,7 @@ export const TreeConnectionLine = ({
     orientedToRole === 'ST';
 
   const segments = shouldUseDualTrack
-    ? calculateConnectionSegments(orientedFromPoint, orientedToPoint, 'wireless')
+    ? calculateConnectionSegments(orientedFromPoint, orientedToPoint)
     : null;
 
   const upstream = segments?.upstream ?? { start: orientedFromPoint, end: orientedToPoint };

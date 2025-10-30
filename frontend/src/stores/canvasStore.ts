@@ -43,6 +43,7 @@ interface CanvasState {
   mode: CanvasMode;
   background: CanvasBackground | null;
   blueprint: CanvasBlueprint | null;
+  blueprintStatus: 'idle' | 'loading' | 'loaded' | 'error';
   viewport: CanvasViewport;
   gridSize: number;
   isLocked: boolean;
@@ -53,6 +54,7 @@ interface CanvasState {
   setBackground: (background: CanvasBackground | null) => void;
   setBlueprint: (blueprint: CanvasBlueprint | null) => void;
   updateBlueprint: (patch: Partial<CanvasBlueprint>) => void;
+  setBlueprintStatus: (status: CanvasState['blueprintStatus']) => void;
   setCanvasData: (layout: CanvasLayout) => void;
   addDeviceToCanvas: (device: DeviceSummary, position?: CanvasElement['position']) => void;
   selectElement: (elementId: string) => void;
@@ -373,6 +375,7 @@ export const useCanvasStore = create<CanvasState>()(
     linking: { active: false, fromElementId: null, pointer: null },
     background: null,
     blueprint: null,
+    blueprintStatus: 'idle',
     gridSize: 48,
     viewport: defaultViewport,
     isLocked: true,
@@ -395,7 +398,12 @@ export const useCanvasStore = create<CanvasState>()(
         }
       })),
     setBackground: (background) => set({ background, isDirty: true }),
-    setBlueprint: (blueprint) => set({ blueprint, isDirty: true }),
+    setBlueprint: (blueprint) =>
+      set({
+        blueprint,
+        isDirty: true,
+        blueprintStatus: blueprint ? 'loading' : 'idle'
+      }),
     updateBlueprint: (patch) =>
       set((state) => {
         if (!state.blueprint) {
@@ -415,6 +423,8 @@ export const useCanvasStore = create<CanvasState>()(
         };
         return { blueprint: nextBlueprint, isDirty: true };
       }),
+    setBlueprintStatus: (status) =>
+      set((state) => (state.blueprintStatus === status ? state : { blueprintStatus: status })),
     setCanvasData: (layout) => {
       const sanitizeBlueprint = (raw: unknown) => {
         if (!raw || typeof raw !== 'object') return null;
@@ -517,11 +527,14 @@ export const useCanvasStore = create<CanvasState>()(
           };
         });
 
+      const sanitizedBlueprint = sanitizeBlueprint(layout.blueprint ?? null);
+
       set({
         elements: nextElements,
         connections: nextConnections,
         background: layout.background ? { url: layout.background.url } : null,
-        blueprint: sanitizeBlueprint(layout.blueprint ?? null),
+        blueprint: sanitizedBlueprint,
+        blueprintStatus: sanitizedBlueprint ? 'loading' : 'idle',
         selectedElement: null,
         selectedConnectionId: null,
         hoveredElementId: null,
@@ -1000,6 +1013,7 @@ export const useCanvasStore = create<CanvasState>()(
         linking: { active: false, fromElementId: null, pointer: null },
         background: null,
         blueprint: null,
+        blueprintStatus: 'idle',
         viewport: defaultViewport,
         mode: 'view',
         isLocked: true,

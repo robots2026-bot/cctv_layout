@@ -26,6 +26,7 @@ export const CanvasLinkingControls = () => {
     focusAllElements,
     elements,
     blueprint,
+    blueprintStatus,
     isDirty,
     viewport,
     lastFocusCenter
@@ -41,6 +42,7 @@ export const CanvasLinkingControls = () => {
     focusAllElements: state.focusAllElements,
     elements: state.elements,
     blueprint: state.blueprint,
+    blueprintStatus: state.blueprintStatus,
     isDirty: state.isDirty,
     viewport: state.viewport,
     lastFocusCenter: state.lastFocusCenter
@@ -219,6 +221,14 @@ export const CanvasLinkingControls = () => {
             <QueueListIcon className="h-4 w-4" />
             <span>树形图</span>
           </button>
+          {blueprint && blueprintStatus === 'loading' && (
+            <span className="text-[11px] text-slate-400">蓝图加载中…</span>
+          )}
+          {blueprint && blueprintStatus === 'error' && (
+            <span className="text-[11px] text-rose-300" role="alert">
+              蓝图加载失败
+            </span>
+          )}
         </div>
         {isSaveVisible && (
           <div className="flex items-center gap-2">

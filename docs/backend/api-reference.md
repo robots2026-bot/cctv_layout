@@ -206,7 +206,7 @@
     "projectId": "uuid",
     "layoutId": "layout-uuid",
     "category": "blueprint",
-    "url": "https://storage.local/cctv-layout-assets/dev/...",
+    "url": "https://app.example.com/storage/cctv-layout-assets/dev/...",
     "objectKey": "dev/...",
     "mimeType": "image/png",
     "sizeBytes": 7340032,

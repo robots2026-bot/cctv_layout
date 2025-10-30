@@ -120,13 +120,6 @@ export class FilesService {
     return `${this.environment}/${projectId}/${safeCategory}/${folder}/${uuid()}${extension}`;
   }
 
-  private buildPublicUrl(objectKey: string) {
-    if (!this.publicBaseUrl) {
-      return undefined;
-    }
-    return `${this.publicBaseUrl}/${objectKey}`;
-  }
-
   private async generateDownloadUrl(objectKey: string) {
     const command = new GetObjectCommand({ Bucket: this.bucket, Key: objectKey });
     return getSignedUrl(this.s3, command, {
@@ -215,11 +208,12 @@ export class FilesService {
     entity.width = dto.width ?? null;
     entity.height = dto.height ?? null;
     entity.etag = dto.etag ?? null;
-    entity.publicUrl = this.buildPublicUrl(entity.objectKey) ?? null;
 
     await this.filesRepository.save(entity);
 
-    const url = entity.publicUrl ?? (await this.generateDownloadUrl(entity.objectKey));
+    const url = this.publicBaseUrl
+      ? `${this.publicBaseUrl}/${entity.objectKey}`
+      : await this.generateDownloadUrl(entity.objectKey);
 
     return {
       id: entity.id,
@@ -244,7 +238,9 @@ export class FilesService {
     if (!entity) {
       throw new NotFoundException(`文件 ${fileId} 不存在`);
     }
-    const url = entity.publicUrl ?? (await this.generateDownloadUrl(entity.objectKey));
+    const url = this.publicBaseUrl
+      ? `${this.publicBaseUrl}/${entity.objectKey}`
+      : await this.generateDownloadUrl(entity.objectKey);
     return {
       id: entity.id,
       projectId: entity.projectId,
